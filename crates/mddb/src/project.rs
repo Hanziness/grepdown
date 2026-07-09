@@ -12,11 +12,11 @@ pub struct MDDBProject {
 
 impl MDDBProject {
     pub fn new(root: String) -> Result<Self> {
-        let root_path = Path::new(&root);
-        let conn = db::start(&root)?;
+        let root_path = Path::new(&root).canonicalize().unwrap().to_string_lossy().into_owned();
+        let conn = db::start(&root_path)?;
 
         return Ok(Self {
-            root: root_path.canonicalize().unwrap().to_string_lossy().into_owned(),
+            root: root_path,
             conn
         })
     }

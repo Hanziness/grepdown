@@ -7,6 +7,10 @@ mod cmd;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Verbosity level (-v, -vv, -vvv)
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
 #[derive(Subcommand)]
@@ -29,18 +33,27 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
+    let log_level = match cli.verbose {
+        0 => log::LevelFilter::Warn,
+        1 => log::LevelFilter::Info,
+        2 => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Trace,
+    };
+    env_logger::Builder::new()
+        .filter_level(log_level)
+        .parse_default_env()
+        .init();
+
     match &cli.command {
         Commands::Init {  } => {
-            println!("You wanted to initialize mddb in this repository");
+            log::debug!("Initializing mddb");
             cmd::init::init();
         },
         Commands::Search { query } => {
-            println!("You wanted to search for {}", query)
+            log::debug!("Searching for: {}", query)
         },
         Commands::Index { } => {
-            println!("You wanted to index the folder")
+            log::debug!("Indexing folder")
         }
     }
-
-    println!("Hello world!")
 }

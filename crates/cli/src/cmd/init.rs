@@ -1,16 +1,13 @@
 pub fn init() {
-    println!("Hey hoo");
     let res = mddb::MDDBProject::new(".".to_string());
 
     match res {
         Ok(project) => {
-            println!("Folder: {}", project.get_root());
-            print!("Starting indexing... ");
+            log::info!("Project: {}", project.get_root());
+            log::info!("Starting indexing...");
             project.refresh().unwrap();
-            println!("success!")
+            log::info!("Indexing complete");
         },
         Err(_) => todo!(),
     }
-
-    println!("We're done here for now.");
 }
