@@ -10,6 +10,7 @@ pub const DB_PATH: &str = "md.db";
 /** Start the database engine at the default location */
 pub fn start(root: &String) -> Result<Connection> {
     let conn = Connection::open(PathBuf::from_iter([root, DB_PATH]))?;
+    log::debug!("Opened database at {}", root);
     init::bootstrap(&conn)?;
 
     return Ok(conn);

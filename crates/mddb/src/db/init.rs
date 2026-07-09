@@ -12,6 +12,7 @@ pub fn bootstrap(conn: &Connection) -> Result<()> {
         let version = (i + 1) as i64;
         if version > current {
             conn.execute_batch(sql)?;
+            log::info!("Applied migration: {}", _name);
         }
     }
 

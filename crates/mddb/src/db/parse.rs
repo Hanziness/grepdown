@@ -29,6 +29,7 @@ impl MDDBProject {
 
         // Walk and diff
         let mut changed: Vec<(String, i64)> = Vec::new();
+        let mut walked = 0usize;
         
         for entry in WalkDir::new(self.get_root())
             .into_iter()
@@ -38,11 +39,13 @@ impl MDDBProject {
                 let mtime = meta.mtime();
                 let path = entry.path().to_string_lossy().into_owned();
 
+                walked += 1;
                 match known.get(&path) {
                     Some(&(old_mtime, _)) if old_mtime == mtime => { },
                     _ => changed.push((path, mtime)),
                 }
             }
+        log::debug!("Walked {} files, {} changed", walked, changed.len());
 
         // Parallel read changed files (level-2: skip if content unchanged)
         let read_results: Vec<(String, i64, String, String)> = changed
@@ -64,8 +67,7 @@ impl MDDBProject {
         // Rebuild changed from read_results so it reflects only actually-processed files
         changed = read_results.iter().map(|(p, m, _, _)| (p.clone(), *m)).collect();
 
-        // TODO Replace this with logging
-        println!("Found {} files to index", read_results.len());
+        log::info!("Indexed {} files", read_results.len());
 
         // Do a single transaction for the whole batch
         let tx = conn.unchecked_transaction()?;
@@ -82,6 +84,7 @@ impl MDDBProject {
 
         }
         tx.commit()?;
+        log::debug!("Committed transaction with {} rows", read_results.len());
 
         Ok(changed)
     }
