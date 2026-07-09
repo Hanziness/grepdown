@@ -1,0 +1,11 @@
+[package]
+name = "mddb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+thiserror = "2.0.18"
+rayon = "1.12.0"
+walkdir = "2.5.0"
+blake3 = { version = "1.8.5", features = ["rayon"] }
