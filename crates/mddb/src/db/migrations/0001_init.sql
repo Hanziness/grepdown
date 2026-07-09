@@ -16,8 +16,6 @@ CREATE TABLE IF NOT EXISTS documents (
     mtime INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_documents_mtime ON documents(mtime);
-
 CREATE TABLE IF NOT EXISTS metadata (
     document_id TEXT NOT NULL REFERENCES documents(path) ON DELETE CASCADE,
     key TEXT NOT NULL,
