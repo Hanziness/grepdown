@@ -2,7 +2,6 @@ use std::{collections::HashMap, fs, os::unix::fs::MetadataExt};
 use rayon::prelude::*;
 use rusqlite::{Result, params};
 use walkdir::WalkDir;
-use blake3;
 
 use crate::project::MDDBProject;
 
@@ -14,17 +13,17 @@ const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) V
 impl MDDBProject {
     /// Refresh the database and index files not seen before
     pub fn refresh(&self) -> Result<Vec<(String, i64)>> {
-        let mut known = HashMap::<String, i64>::new();
+        let mut known = HashMap::<String, (i64, String)>::new();
         let conn = self.get_conn();
 
         // Load known mtimes into memory
         {
             let mut stmt = conn.prepare(STMT_MTIME)?;
-            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
 
             for r in rows {
-                let (path, mtime): (String, i64) = r?;
-                known.insert(path, mtime);
+                let (path, mtime, content_hash): (String, i64, String) = r?;
+                known.insert(path, (mtime, content_hash));
             }
         }
 
@@ -40,24 +39,34 @@ impl MDDBProject {
                 let path = entry.path().to_string_lossy().into_owned();
 
                 match known.get(&path) {
-                    Some(&old_mtime) if old_mtime == mtime => { },
+                    Some(&(old_mtime, _)) if old_mtime == mtime => { },
                     _ => changed.push((path, mtime)),
                 }
             }
 
-        // TODO Replace this with logging
-        println!("Found {} changed files", changed.len());
-
-        // Parallel read changed files
+        // Parallel read changed files (level-2: skip if content unchanged)
         let read_results: Vec<(String, i64, String, String)> = changed
             .par_iter()
-            .map(|(path, mtime)| {
+            .filter_map(|(path, mtime)| {
                 let content = fs::read_to_string(path).unwrap_or_default();
                 let hash = blake3::hash(&content.as_bytes()).to_string();
-                (path.clone(), *mtime, content, hash)
+
+                if let Some((_, old_hash)) = known.get(path) {
+                    if *old_hash == hash {
+                        return None; // content unchanged, skip FTS re-index
+                    }
+                }
+
+                Some((path.clone(), *mtime, content, hash))
             })
             .collect();
-        
+
+        // Rebuild changed from read_results so it reflects only actually-processed files
+        changed = read_results.iter().map(|(p, m, _, _)| (p.clone(), *m)).collect();
+
+        // TODO Replace this with logging
+        println!("Found {} files to index", read_results.len());
+
         // Do a single transaction for the whole batch
         let tx = conn.unchecked_transaction()?;
         {
@@ -74,6 +83,6 @@ impl MDDBProject {
         }
         tx.commit()?;
 
-        return Ok(changed);
+        Ok(changed)
     }
 }
