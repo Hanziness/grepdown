@@ -1,6 +1,5 @@
-use std::path::Path;
-
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
+use crate::error::Result;
 
 use crate::db;
 
@@ -11,11 +10,11 @@ pub struct MDDBProject {
 }
 
 impl MDDBProject {
-    pub fn new(root: String) -> Result<Self> {
-        let root_path = Path::new(&root).canonicalize().unwrap().to_string_lossy().into_owned();
+    pub fn new(root: impl AsRef<std::path::Path>) -> Result<Self> {
+        let root_path = root.as_ref().canonicalize()?.to_string_lossy().into_owned();
         let conn = db::start(&root_path)?;
 
-        return Ok(Self {
+        Ok(Self {
             root: root_path,
             conn
         })
@@ -23,10 +22,10 @@ impl MDDBProject {
 
     /// Get a reference to the project's database connection
     pub fn get_conn(&self) -> &Connection {
-        return &self.conn;
+        &self.conn
     }
 
-    pub fn get_root(&self) -> String {
-        return self.root.clone();
+    pub fn get_root(&self) -> &str {
+        &self.root
     }
 }

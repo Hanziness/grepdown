@@ -1,4 +1,5 @@
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
+use crate::error::Result;
 
 const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("migrations/0001_init.sql"))

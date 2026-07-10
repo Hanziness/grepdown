@@ -1,6 +1,8 @@
 mod db;
+mod error;
 mod project;
 
+pub use error::{Error, Result};
 pub use project::MDDBProject;
 
 #[cfg(test)]

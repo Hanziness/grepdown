@@ -1,7 +1,8 @@
 use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt};
 use rayon::prelude::*;
-use rusqlite::{Result, params};
+use rusqlite::params;
 use walkdir::WalkDir;
+use crate::error::Result;
 
 use crate::project::MDDBProject;
 
@@ -36,7 +37,7 @@ impl MDDBProject {
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().map_or(false, |x| x == "md")) {
-                let meta = entry.metadata().unwrap();
+                let meta = match entry.metadata() { Ok(m) => m, Err(_) => continue };
                 let mtime = meta.mtime();
                 let path = entry.path().to_string_lossy().into_owned();
 
@@ -56,7 +57,7 @@ impl MDDBProject {
         let read_results: Vec<(String, i64, String, String)> = changed
             .par_iter()
             .filter_map(|(path, mtime)| {
-                let content = fs::read_to_string(path).unwrap_or_default();
+                let content = fs::read_to_string(path).unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
                 let hash = blake3::hash(&content.as_bytes()).to_string();
 
                 if let Some((_, old_hash)) = known.get(path) {
