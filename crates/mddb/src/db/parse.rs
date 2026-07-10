@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, os::unix::fs::MetadataExt};
+use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt};
 use rayon::prelude::*;
 use rusqlite::{Result, params};
 use walkdir::WalkDir;
@@ -29,6 +29,7 @@ impl MDDBProject {
 
         // Walk and diff
         let mut changed: Vec<(String, i64)> = Vec::new();
+        let mut current_paths = HashSet::new();
         let mut walked = 0usize;
         
         for entry in WalkDir::new(self.get_root())
@@ -39,6 +40,7 @@ impl MDDBProject {
                 let mtime = meta.mtime();
                 let path = entry.path().to_string_lossy().into_owned();
 
+                current_paths.insert(path.clone());
                 walked += 1;
                 match known.get(&path) {
                     Some(&(old_mtime, _)) if old_mtime == mtime => { },
@@ -46,6 +48,9 @@ impl MDDBProject {
                 }
             }
         log::debug!("Walked {} files, {} changed", walked, changed.len());
+
+        // Detect deleted files (known from DB but no longer on disk)
+        let deleted: Vec<String> = known.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
 
         // Parallel read changed files (level-2: skip if content unchanged)
         let read_results: Vec<(String, i64, String, String)> = changed
@@ -82,9 +87,16 @@ impl MDDBProject {
                 upsert_meta.execute(params![path, mtime, hash])?;
             }
 
+            // Remove files deleted from disk
+            let mut del_stale = tx.prepare("DELETE FROM documents WHERE path = ?1")?;
+            for path in &deleted {
+                del_fts.execute(params![path])?;
+                del_stale.execute(params![path])?;
+            }
+
         }
         tx.commit()?;
-        log::debug!("Committed transaction with {} rows", read_results.len());
+        log::debug!("Committed transaction with {} rows, {} deleted", read_results.len(), deleted.len());
 
         Ok(changed)
     }
