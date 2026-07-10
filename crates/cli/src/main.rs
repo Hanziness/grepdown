@@ -24,6 +24,14 @@ enum Commands {
     Search {
         /// String to search in the database
         query: String,
+        
+        /// Maximum number of results to return
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+        
+        /// Skip refreshing the index before searching
+        #[arg(long)]
+        no_refresh: bool,
     },
 
     /// Explicitly index the folder
@@ -49,11 +57,17 @@ fn main() {
             log::debug!("Initializing mddb");
             cmd::init::init();
         },
-        Commands::Search { query } => {
-            log::debug!("Searching for: {}", query)
+        Commands::Search { query, limit, no_refresh } => {
+            log::debug!("Searching for: {}", query);
+            if let Err(e) = cmd::search::search(query, *limit, *no_refresh) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Commands::Index { } => {
-            log::debug!("Indexing folder")
+            log::debug!("Indexing folder");
+            let project = mddb::MDDBProject::new(".").unwrap();
+            project.refresh().unwrap();
         }
     }
 }
