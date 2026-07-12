@@ -2,7 +2,8 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 const MIGRATIONS: &[(&str, &str)] = &[
-    ("0001_init", include_str!("migrations/0001_init.sql"))
+    ("0001_init", include_str!("migrations/0001_init.sql")),
+    ("0002_tags_fts", include_str!("migrations/0002_tags_fts.sql")),
 ];
 
 pub fn bootstrap(conn: &Connection) -> Result<()> {

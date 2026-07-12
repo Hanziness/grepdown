@@ -1,5 +1,6 @@
 mod db;
 mod error;
+mod frontmatter;
 mod project;
 mod search;
 
