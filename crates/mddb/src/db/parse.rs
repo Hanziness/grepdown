@@ -1,7 +1,8 @@
-use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt};
+use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt, path::Path};
 use rayon::prelude::*;
 use rusqlite::params;
 use walkdir::WalkDir;
+use pulldown_cmark::{Event, Parser, Tag};
 use crate::error::Result;
 
 use crate::project::MDDBProject;
@@ -13,6 +14,44 @@ const STMT_INS_FTS: &str = "INSERT INTO documents_fts (path, body) VALUES (?1, ?
 const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) VALUES (?1, ?2, ?3) ON CONFLICT(path) DO UPDATE SET mtime = excluded.mtime, content_hash = excluded.content_hash";
 const STMT_DEL_TAGS: &str = "DELETE FROM tags_fts WHERE path = ?1";
 const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
+const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
+const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, link_type, raw_target) VALUES (?1, ?2, ?3, ?4)";
+
+/// Extract all links from markdown content.
+/// Returns (target, is_external) where is_external=true means citation (URL).
+fn extract_links(content: &str) -> Vec<(String, bool)> {
+    Parser::new(content)
+        .filter_map(|event| match event {
+            Event::Start(Tag::Link { dest_url, .. }) | Event::Start(Tag::Image { dest_url, .. }) => {
+                let url = dest_url.to_string();
+                let is_external = url.starts_with("http://") || url.starts_with("https://") || url.contains("://");
+                Some((url, is_external))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Resolve a bundle-relative link target to a canonical document path.
+/// Tries: target.md, target/index.md
+fn resolve_link(base_path: &str, target: &str) -> Option<String> {
+    let base_dir = Path::new(base_path).parent()?;
+    let resolved = base_dir.join(target);
+    
+    // Try direct: target.md
+    let direct = resolved.with_extension("md");
+    if direct.exists() {
+        return Some(direct.to_string_lossy().into_owned());
+    }
+    
+    // Try directory index: target/index.md
+    let index = resolved.join("index.md");
+    if index.exists() {
+        return Some(index.to_string_lossy().into_owned());
+    }
+    
+    None
+}
 
 impl MDDBProject {
     /// Refresh the database and index files not seen before
@@ -57,7 +96,7 @@ impl MDDBProject {
         let deleted: Vec<String> = known.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
 
         // Parallel read changed files (level-2: skip if content unchanged)
-        let read_results: Vec<(String, i64, String, String, String)> = changed
+        let read_results: Vec<(String, i64, String, String, String, Vec<(String, bool)>)> = changed
             .par_iter()
             .filter_map(|(path, mtime)| {
                 let content = fs::read_to_string(path).unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
@@ -73,13 +112,15 @@ impl MDDBProject {
                     .map(|fm| extract_tags(&fm))
                     .unwrap_or_default();
                 let tags_str = tags.join(" ");
+                
+                let links = extract_links(&content);
 
-                Some((path.clone(), *mtime, content, hash, tags_str))
+                Some((path.clone(), *mtime, content, hash, tags_str, links))
             })
             .collect();
 
         // Rebuild changed from read_results so it reflects only actually-processed files
-        changed = read_results.iter().map(|(p, m, _, _, _)| (p.clone(), *m)).collect();
+        changed = read_results.iter().map(|(p, m, _, _, _, _)| (p.clone(), *m)).collect();
 
         log::info!("Indexed {} files", read_results.len());
 
@@ -91,14 +132,31 @@ impl MDDBProject {
             let mut upsert_meta = tx.prepare(STMT_UPD_META)?;
             let mut del_tags = tx.prepare(STMT_DEL_TAGS)?;
             let mut ins_tags = tx.prepare(STMT_INS_TAGS)?;
+            let mut del_links = tx.prepare(STMT_DEL_LINKS)?;
+            let mut ins_link = tx.prepare(STMT_INS_LINK)?;
 
-            for (path, mtime, content, hash, tags_str) in &read_results {
+            for (path, mtime, content, hash, tags_str, links) in &read_results {
                 del_fts.execute(params![path])?;
                 ins_fts.execute(params![path, content])?;
                 upsert_meta.execute(params![path, mtime, hash])?;
                 del_tags.execute(params![path])?;
                 if !tags_str.is_empty() {
                     ins_tags.execute(params![path, tags_str])?;
+                }
+                
+                // Update link graph
+                del_links.execute(params![path])?;
+                for (target, is_external) in links {
+                    if *is_external {
+                        // Citation: store URL directly
+                        ins_link.execute(params![path, target, "citation", target])?;
+                    } else {
+                        // Cross-ref: resolve to canonical path
+                        if let Some(resolved) = resolve_link(path, target) {
+                            ins_link.execute(params![path, resolved, "cross-ref", target])?;
+                        }
+                        // Unresolved links are silently dropped (target doesn't exist yet)
+                    }
                 }
             }
 
