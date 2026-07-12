@@ -12,3 +12,10 @@ walkdir = "2.5.0"
 blake3 = "1.8.5"
 serde_yaml = "0.9"
 pulldown-cmark = "0.13"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "search"
+harness = false
