@@ -178,17 +178,25 @@ impl MDDBProject {
             for (path, _mtime, _content, _hash, _tags_str, links) in &read_results {
                 del_links.execute(params![path])?;
                 del_citations.execute(params![path])?;
+                
+                // Deduplicate resolved links and citations
+                let mut resolved_links = HashSet::new();
+                let mut resolved_citations = HashSet::new();
+                
                 for (target, is_external) in links {
                     if *is_external {
-                        // Citation: store URL in separate table
-                        ins_citation.execute(params![path, target, target])?;
-                    } else {
-                        // Cross-ref: resolve to canonical path
-                        if let Some(resolved) = resolve_link(path, target) {
-                            ins_link.execute(params![path, resolved, target])?;
-                        }
-                        // Unresolved links are silently dropped (target doesn't exist yet)
+                        resolved_citations.insert(target.clone());
+                    } else if let Some(resolved) = resolve_link(path, target) {
+                        resolved_links.insert((resolved, target.clone()));
                     }
+                }
+                
+                for (resolved, raw_target) in resolved_links {
+                    ins_link.execute(params![path, resolved, raw_target])?;
+                }
+                
+                for url in resolved_citations {
+                    ins_citation.execute(params![path, url, url])?;
                 }
             }
 
