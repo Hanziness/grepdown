@@ -9,6 +9,19 @@ pub struct SearchResult {
     pub score: f64,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Link {
+    pub target: String,
+    pub link_type: String,
+    pub raw_target: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReachableNode {
+    pub path: String,
+    pub depth: i64,
+}
+
 impl MDDBProject {
     /// Search the indexed documents using FTS5 full-text search.
     /// 
@@ -49,6 +62,85 @@ impl MDDBProject {
             output.push(result?);
         }
         
+        Ok(output)
+    }
+
+    /// Get all links from a document (forward traversal).
+    pub fn get_links_from(&self, from_id: &str) -> Result<Vec<Link>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare(
+            "SELECT to_id, link_type, raw_target FROM links WHERE from_id = ?1"
+        )?;
+        
+        let results = stmt.query_map(params![from_id], |row| {
+            Ok(Link {
+                target: row.get(0)?,
+                link_type: row.get(1)?,
+                raw_target: row.get(2)?,
+            })
+        })?;
+        
+        let mut output = Vec::new();
+        for result in results {
+            output.push(result?);
+        }
+        Ok(output)
+    }
+
+    /// Get all links to a document (reverse traversal / backlinks).
+    pub fn get_links_to(&self, to_id: &str) -> Result<Vec<Link>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare(
+            "SELECT from_id, link_type, raw_target FROM links WHERE to_id = ?1"
+        )?;
+        
+        let results = stmt.query_map(params![to_id], |row| {
+            Ok(Link {
+                target: row.get(0)?,
+                link_type: row.get(1)?,
+                raw_target: row.get(2)?,
+            })
+        })?;
+        
+        let mut output = Vec::new();
+        for result in results {
+            output.push(result?);
+        }
+        Ok(output)
+    }
+
+    /// BFS traversal: get all nodes reachable from a starting node up to max_depth hops.
+    /// Returns nodes with their minimum depth from the start.
+    pub fn get_reachable(&self, from_id: &str, max_depth: i64) -> Result<Vec<ReachableNode>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare(
+            "WITH RECURSIVE bfs AS (
+                SELECT to_id AS node, 1 AS depth 
+                FROM links 
+                WHERE from_id = ?1 AND link_type = 'cross-ref'
+                UNION ALL
+                SELECT l.to_id, bfs.depth + 1
+                FROM links l 
+                JOIN bfs ON l.from_id = bfs.node
+                WHERE l.link_type = 'cross-ref' AND bfs.depth < ?2
+            )
+            SELECT node, MIN(depth) AS depth 
+            FROM bfs 
+            GROUP BY node 
+            ORDER BY depth"
+        )?;
+        
+        let results = stmt.query_map(params![from_id, max_depth], |row| {
+            Ok(ReachableNode {
+                path: row.get(0)?,
+                depth: row.get(1)?,
+            })
+        })?;
+        
+        let mut output = Vec::new();
+        for result in results {
+            output.push(result?);
+        }
         Ok(output)
     }
 }
