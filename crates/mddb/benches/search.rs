@@ -5,10 +5,8 @@ use std::path::PathBuf;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
+        .parent().expect("mddb should be nested inside a workspace")
+        .parent().expect("workspace root should exist")
         .to_path_buf()
 }
 
@@ -33,7 +31,7 @@ const QUERIES: &[&str] = &[
 fn delete_db() {
     let db = db_path();
     if db.exists() {
-        fs::remove_file(&db).ok();
+        fs::remove_file(&db).expect("failed to delete benchmark DB");
     }
 }
 
@@ -41,11 +39,16 @@ fn bench_refresh_initial(c: &mut Criterion) {
     let mut group = c.benchmark_group("refresh");
 
     group.bench_function("initial", |b| {
-        b.iter(|| {
-            delete_db();
-            let project = MDDBProject::new(bench_root()).unwrap();
-            project.refresh().unwrap();
-        });
+        b.iter_batched(
+            || {
+                delete_db();
+                MDDBProject::new(bench_root()).unwrap()
+            },
+            |project| {
+                project.refresh().unwrap();
+            },
+            criterion::BatchSize::SmallInput,
+        );
     });
 
     group.finish();
@@ -73,12 +76,18 @@ fn bench_search_cold(c: &mut Criterion) {
     for query in QUERIES {
         let query = *query;
         group.bench_function(format!("cold/{}", query), |b| {
-            b.iter(|| {
-                delete_db();
-                let project = MDDBProject::new(bench_root()).unwrap();
-                project.refresh().unwrap();
-                project.search(query, SEARCH_LIMIT).unwrap();
-            });
+            b.iter_batched(
+                || {
+                    delete_db();
+                    let project = MDDBProject::new(bench_root()).unwrap();
+                    project.refresh().unwrap();
+                    project
+                },
+                |project| {
+                    project.search(query, SEARCH_LIMIT).unwrap();
+                },
+                criterion::BatchSize::SmallInput,
+            );
         });
     }
 
