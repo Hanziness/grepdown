@@ -12,7 +12,6 @@ pub struct SearchResult {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Link {
     pub target: String,
-    pub link_type: String,
     pub raw_target: Option<String>,
 }
 
@@ -49,20 +48,14 @@ impl MDDBProject {
             LIMIT ?2"
         )?;
         
-        let results = stmt.query_map(params![query, limit as i64], |row| {
+        stmt.query_map(params![query, limit as i64], |row| {
             Ok(SearchResult {
                 path: row.get(0)?,
                 snippet: row.get(1)?,
                 score: row.get(2)?,
             })
-        })?;
-        
-        let mut output = Vec::new();
-        for result in results {
-            output.push(result?);
-        }
-        
-        Ok(output)
+        })?.map(|r| r.map_err(Into::into))
+          .collect::<Result<Vec<_>>>()
     }
 
     /// Get all links from a document (forward traversal).
@@ -73,19 +66,13 @@ impl MDDBProject {
             "SELECT to_id, raw_target FROM links WHERE from_id = ?1"
         )?;
         
-        let results = stmt.query_map(params![from_id], |row| {
+        stmt.query_map(params![from_id], |row| {
             Ok(Link {
                 target: row.get(0)?,
-                link_type: "cross-ref".to_string(),
                 raw_target: row.get(1)?,
             })
-        })?;
-        
-        let mut output = Vec::new();
-        for result in results {
-            output.push(result?);
-        }
-        Ok(output)
+        })?.map(|r| r.map_err(Into::into))
+          .collect::<Result<Vec<_>>>()
     }
 
     /// Get all citations (external URLs) from a document.
@@ -95,13 +82,9 @@ impl MDDBProject {
             "SELECT url FROM citations WHERE from_id = ?1"
         )?;
         
-        let results = stmt.query_map(params![from_id], |row| row.get(0))?;
-        
-        let mut output = Vec::new();
-        for result in results {
-            output.push(result?);
-        }
-        Ok(output)
+        stmt.query_map(params![from_id], |row| row.get(0))?
+            .map(|r| r.map_err(Into::into))
+            .collect::<Result<Vec<_>>>()
     }
 
     /// Get all links to a document (reverse traversal / backlinks).
@@ -111,19 +94,13 @@ impl MDDBProject {
             "SELECT from_id, raw_target FROM links WHERE to_id = ?1"
         )?;
         
-        let results = stmt.query_map(params![to_id], |row| {
+        stmt.query_map(params![to_id], |row| {
             Ok(Link {
                 target: row.get(0)?,
-                link_type: "cross-ref".to_string(),
                 raw_target: row.get(1)?,
             })
-        })?;
-        
-        let mut output = Vec::new();
-        for result in results {
-            output.push(result?);
-        }
-        Ok(output)
+        })?.map(|r| r.map_err(Into::into))
+          .collect::<Result<Vec<_>>>()
     }
 
     /// BFS traversal: get all nodes reachable from a starting node up to max_depth hops.
@@ -147,17 +124,12 @@ impl MDDBProject {
             ORDER BY depth"
         )?;
         
-        let results = stmt.query_map(params![from_id, max_depth], |row| {
+        stmt.query_map(params![from_id, max_depth], |row| {
             Ok(ReachableNode {
                 path: row.get(0)?,
                 depth: row.get(1)?,
             })
-        })?;
-        
-        let mut output = Vec::new();
-        for result in results {
-            output.push(result?);
-        }
-        Ok(output)
+        })?.map(|r| r.map_err(Into::into))
+          .collect::<Result<Vec<_>>>()
     }
 }
