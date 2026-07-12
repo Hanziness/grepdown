@@ -26,7 +26,7 @@ fn extract_links(content: &str) -> Vec<(String, bool)> {
         .filter_map(|event| match event {
             Event::Start(Tag::Link { dest_url, .. }) | Event::Start(Tag::Image { dest_url, .. }) => {
                 let url = dest_url.to_string();
-                let is_external = url.starts_with("http://") || url.starts_with("https://") || url.contains("://");
+                let is_external = url.contains("://") || url.starts_with("mailto:") || url.starts_with("//");
                 Some((url, is_external))
             }
             _ => None,
