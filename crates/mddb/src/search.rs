@@ -66,19 +66,36 @@ impl MDDBProject {
     }
 
     /// Get all links from a document (forward traversal).
+    /// Returns cross-references to other documents.
     pub fn get_links_from(&self, from_id: &str) -> Result<Vec<Link>> {
         let conn = self.get_conn();
         let mut stmt = conn.prepare(
-            "SELECT to_id, link_type, raw_target FROM links WHERE from_id = ?1"
+            "SELECT to_id, raw_target FROM links WHERE from_id = ?1"
         )?;
         
         let results = stmt.query_map(params![from_id], |row| {
             Ok(Link {
                 target: row.get(0)?,
-                link_type: row.get(1)?,
-                raw_target: row.get(2)?,
+                link_type: "cross-ref".to_string(),
+                raw_target: row.get(1)?,
             })
         })?;
+        
+        let mut output = Vec::new();
+        for result in results {
+            output.push(result?);
+        }
+        Ok(output)
+    }
+
+    /// Get all citations (external URLs) from a document.
+    pub fn get_citations_from(&self, from_id: &str) -> Result<Vec<String>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare(
+            "SELECT url FROM citations WHERE from_id = ?1"
+        )?;
+        
+        let results = stmt.query_map(params![from_id], |row| row.get(0))?;
         
         let mut output = Vec::new();
         for result in results {
@@ -91,14 +108,14 @@ impl MDDBProject {
     pub fn get_links_to(&self, to_id: &str) -> Result<Vec<Link>> {
         let conn = self.get_conn();
         let mut stmt = conn.prepare(
-            "SELECT from_id, link_type, raw_target FROM links WHERE to_id = ?1"
+            "SELECT from_id, raw_target FROM links WHERE to_id = ?1"
         )?;
         
         let results = stmt.query_map(params![to_id], |row| {
             Ok(Link {
                 target: row.get(0)?,
-                link_type: row.get(1)?,
-                raw_target: row.get(2)?,
+                link_type: "cross-ref".to_string(),
+                raw_target: row.get(1)?,
             })
         })?;
         
@@ -117,12 +134,12 @@ impl MDDBProject {
             "WITH RECURSIVE bfs AS (
                 SELECT to_id AS node, 1 AS depth 
                 FROM links 
-                WHERE from_id = ?1 AND link_type = 'cross-ref'
+                WHERE from_id = ?1
                 UNION ALL
                 SELECT l.to_id, bfs.depth + 1
                 FROM links l 
                 JOIN bfs ON l.from_id = bfs.node
-                WHERE l.link_type = 'cross-ref' AND bfs.depth < ?2
+                WHERE bfs.depth < ?2
             )
             SELECT node, MIN(depth) AS depth 
             FROM bfs 

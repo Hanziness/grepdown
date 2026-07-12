@@ -15,7 +15,9 @@ const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) V
 const STMT_DEL_TAGS: &str = "DELETE FROM tags_fts WHERE path = ?1";
 const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
 const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
-const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, link_type, raw_target) VALUES (?1, ?2, ?3, ?4)";
+const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target) VALUES (?1, ?2, ?3)";
+const STMT_DEL_CITATIONS: &str = "DELETE FROM citations WHERE from_id = ?1";
+const STMT_INS_CITATION: &str = "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
 
 /// Extract all links from markdown content.
 /// Returns (target, is_external) where is_external=true means citation (URL).
@@ -38,19 +40,41 @@ fn resolve_link(base_path: &str, target: &str) -> Option<String> {
     let base_dir = Path::new(base_path).parent()?;
     let resolved = base_dir.join(target);
     
+    // Normalize the path to resolve .. and . components
+    let normalized = normalize_path(&resolved);
+    
     // Try direct: target.md
-    let direct = resolved.with_extension("md");
+    let direct = normalized.with_extension("md");
     if direct.exists() {
         return Some(direct.to_string_lossy().into_owned());
     }
     
     // Try directory index: target/index.md
-    let index = resolved.join("index.md");
+    let index = normalized.join("index.md");
     if index.exists() {
         return Some(index.to_string_lossy().into_owned());
     }
     
     None
+}
+
+/// Normalize a path by resolving . and .. components without following symlinks.
+fn normalize_path(path: &Path) -> std::path::PathBuf {
+    let mut normalized = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {
+                // Skip .
+            }
+            _ => {
+                normalized.push(component);
+            }
+        }
+    }
+    normalized
 }
 
 impl MDDBProject {
@@ -132,10 +156,9 @@ impl MDDBProject {
             let mut upsert_meta = tx.prepare(STMT_UPD_META)?;
             let mut del_tags = tx.prepare(STMT_DEL_TAGS)?;
             let mut ins_tags = tx.prepare(STMT_INS_TAGS)?;
-            let mut del_links = tx.prepare(STMT_DEL_LINKS)?;
-            let mut ins_link = tx.prepare(STMT_INS_LINK)?;
 
-            for (path, mtime, content, hash, tags_str, links) in &read_results {
+            // Phase 1: Upsert all documents first (so FK constraints pass for links)
+            for (path, mtime, content, hash, tags_str, _links) in &read_results {
                 del_fts.execute(params![path])?;
                 ins_fts.execute(params![path, content])?;
                 upsert_meta.execute(params![path, mtime, hash])?;
@@ -143,17 +166,24 @@ impl MDDBProject {
                 if !tags_str.is_empty() {
                     ins_tags.execute(params![path, tags_str])?;
                 }
-                
-                // Update link graph
+            }
+
+            // Phase 2: Now insert links (all documents exist)
+            let mut del_links = tx.prepare(STMT_DEL_LINKS)?;
+            let mut ins_link = tx.prepare(STMT_INS_LINK)?;
+            let mut del_citations = tx.prepare(STMT_DEL_CITATIONS)?;
+            let mut ins_citation = tx.prepare(STMT_INS_CITATION)?;
+            for (path, _mtime, _content, _hash, _tags_str, links) in &read_results {
                 del_links.execute(params![path])?;
+                del_citations.execute(params![path])?;
                 for (target, is_external) in links {
                     if *is_external {
-                        // Citation: store URL directly
-                        ins_link.execute(params![path, target, "citation", target])?;
+                        // Citation: store URL in separate table
+                        ins_citation.execute(params![path, target, target])?;
                     } else {
                         // Cross-ref: resolve to canonical path
                         if let Some(resolved) = resolve_link(path, target) {
-                            ins_link.execute(params![path, resolved, "cross-ref", target])?;
+                            ins_link.execute(params![path, resolved, target])?;
                         }
                         // Unresolved links are silently dropped (target doesn't exist yet)
                     }
