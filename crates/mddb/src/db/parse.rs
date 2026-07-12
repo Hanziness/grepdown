@@ -187,12 +187,12 @@ impl MDDBProject {
                     if *is_external {
                         resolved_citations.insert(target.clone());
                     } else if let Some(resolved) = resolve_link(path, target) {
-                        resolved_links.insert((resolved, target.clone()));
+                        resolved_links.insert(resolved);
                     }
                 }
                 
-                for (resolved, raw_target) in resolved_links {
-                    ins_link.execute(params![path, resolved, raw_target])?;
+                for resolved in resolved_links {
+                    ins_link.execute(params![path, resolved, resolved])?;
                 }
                 
                 for url in resolved_citations {
