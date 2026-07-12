@@ -103,4 +103,4 @@ This turns a folder of Markdown files into a queryable knowledge base.
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE](LICENSE.md) for details.
