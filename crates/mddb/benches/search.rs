@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use mddb::MDDBProject;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -41,16 +41,11 @@ fn bench_refresh_initial(c: &mut Criterion) {
     let mut group = c.benchmark_group("refresh");
 
     group.bench_function("initial", |b| {
-        b.iter_batched(
-            || {
-                delete_db();
-            },
-            |_| {
-                let project = MDDBProject::new(bench_root()).unwrap();
-                project.refresh().unwrap();
-            },
-            criterion::BatchSize::SmallInput,
-        );
+        b.iter(|| {
+            delete_db();
+            let project = MDDBProject::new(bench_root()).unwrap();
+            project.refresh().unwrap();
+        });
     });
 
     group.finish();
@@ -76,19 +71,14 @@ fn bench_search_cold(c: &mut Criterion) {
     let mut group = c.benchmark_group("search");
 
     for query in QUERIES {
+        let query = *query;
         group.bench_function(format!("cold/{}", query), |b| {
-            b.iter_batched(
-                || {
-                    delete_db();
-                    let project = MDDBProject::new(bench_root()).unwrap();
-                    project.refresh().unwrap();
-                    project
-                },
-                |project| {
-                    project.search(query, SEARCH_LIMIT).unwrap();
-                },
-                criterion::BatchSize::SmallInput,
-            );
+            b.iter(|| {
+                delete_db();
+                let project = MDDBProject::new(bench_root()).unwrap();
+                project.refresh().unwrap();
+                project.search(query, SEARCH_LIMIT).unwrap();
+            });
         });
     }
 
