@@ -13,17 +13,27 @@ impl MDDBProject {
     /// Search the indexed documents using FTS5 full-text search.
     /// 
     /// The query string supports FTS5 syntax (e.g., "word1 word2", "word1 OR word2",
-    /// "word1 NEAR word2", "prefix*"). Searches both path and body columns.
+    /// "word1 NEAR word2", "prefix*"). Searches body content and tags.
     /// 
     /// Results are ranked by BM25 relevance (lower score = better match).
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         let conn = self.get_conn();
         let mut stmt = conn.prepare(
-            "SELECT path, snippet(documents_fts, 1, '<b>', '</b>', ' ... ', 32), bm25(documents_fts)
-             FROM documents_fts
-             WHERE documents_fts MATCH ?1
-             ORDER BY bm25(documents_fts)
-             LIMIT ?2"
+            "SELECT path, snippet, score FROM (
+                SELECT path,
+                       snippet(documents_fts, 1, '<b>', '</b>', ' ... ', 32) as snippet,
+                       bm25(documents_fts) as score
+                FROM documents_fts
+                WHERE documents_fts MATCH ?1
+                UNION ALL
+                SELECT path,
+                       tags as snippet,
+                       bm25(tags_fts) as score
+                FROM tags_fts
+                WHERE tags_fts MATCH ?1
+            )
+            ORDER BY score
+            LIMIT ?2"
         )?;
         
         let results = stmt.query_map(params![query, limit as i64], |row| {
