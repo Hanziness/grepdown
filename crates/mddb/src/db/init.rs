@@ -5,6 +5,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("migrations/0001_init.sql")),
     ("0002_tags_fts", include_str!("migrations/0002_tags_fts.sql")),
     ("0003_link_graph", include_str!("migrations/0003_link_graph.sql")),
+    ("0004_drop_metadata", include_str!("migrations/0004_drop_metadata.sql")),
 ];
 
 pub fn bootstrap(conn: &Connection) -> Result<()> {
