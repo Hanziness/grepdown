@@ -4,6 +4,7 @@ use crate::error::Result;
 const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("migrations/0001_init.sql")),
     ("0002_tags_fts", include_str!("migrations/0002_tags_fts.sql")),
+    ("0003_link_graph", include_str!("migrations/0003_link_graph.sql")),
 ];
 
 pub fn bootstrap(conn: &Connection) -> Result<()> {
