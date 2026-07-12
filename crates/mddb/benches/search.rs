@@ -1,0 +1,107 @@
+use criterion::{Criterion, criterion_group, criterion_main};
+use mddb::MDDBProject;
+use std::fs;
+use std::path::Path;
+
+const BENCH_ROOT: &str = "target/bench-data/rust";
+const DB_PATH: &str = "target/bench-data/rust/md.db";
+const SEARCH_LIMIT: usize = 10;
+
+const QUERIES: &[&str] = &[
+    "iterator",
+    "unsafe",
+    "async*",
+    "lifetime borrow",
+    "trait OR impl",
+];
+
+fn delete_db() {
+    if Path::new(DB_PATH).exists() {
+        fs::remove_file(DB_PATH).ok();
+    }
+}
+
+fn bench_refresh_initial(c: &mut Criterion) {
+    let mut group = c.benchmark_group("refresh");
+
+    group.bench_function("initial", |b| {
+        b.iter_batched(
+            || {
+                delete_db();
+            },
+            |_| {
+                let project = MDDBProject::new(BENCH_ROOT).unwrap();
+                project.refresh().unwrap();
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    group.finish();
+}
+
+fn bench_refresh_noop(c: &mut Criterion) {
+    let mut group = c.benchmark_group("refresh");
+
+    // Ensure DB is indexed before benchmarking
+    let project = MDDBProject::new(BENCH_ROOT).unwrap();
+    project.refresh().unwrap();
+
+    group.bench_function("noop", |b| {
+        b.iter(|| {
+            project.refresh().unwrap();
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_search_cold(c: &mut Criterion) {
+    let mut group = c.benchmark_group("search");
+
+    for query in QUERIES {
+        group.bench_function(format!("cold/{}", query), |b| {
+            b.iter_batched(
+                || {
+                    delete_db();
+                    let project = MDDBProject::new(BENCH_ROOT).unwrap();
+                    project.refresh().unwrap();
+                    project
+                },
+                |project| {
+                    project.search(query, SEARCH_LIMIT).unwrap();
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_search_warm(c: &mut Criterion) {
+    let mut group = c.benchmark_group("search");
+
+    // Ensure DB is indexed before benchmarking
+    let project = MDDBProject::new(BENCH_ROOT).unwrap();
+    project.refresh().unwrap();
+
+    for query in QUERIES {
+        group.bench_function(format!("warm/{}", query), |b| {
+            b.iter(|| {
+                project.search(query, SEARCH_LIMIT).unwrap();
+            });
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_refresh_initial,
+    bench_refresh_noop,
+    bench_search_cold,
+    bench_search_warm
+);
+criterion_main!(benches);
