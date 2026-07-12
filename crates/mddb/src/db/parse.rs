@@ -137,7 +137,9 @@ impl MDDBProject {
                     .unwrap_or_default();
                 let tags_str = tags.join(" ");
                 
-                let links = extract_links(&content);
+                let mut links = extract_links(&content);
+                links.sort();
+                links.dedup();
 
                 Some((path.clone(), *mtime, content, hash, tags_str, links))
             })
