@@ -40,8 +40,15 @@ enum Commands {
     /// Run lints on the knowledge base
     Lint {},
 
-    /// Approve all stale references
-    ApproveEdits {},
+    /// Approve stale references for specific files or all files
+    ApproveEdits {
+        /// Approve all stale references
+        #[arg(long)]
+        all: bool,
+
+        /// Specific file or folder paths to approve
+        paths: Vec<String>,
+    },
 }
 
 fn main() {
@@ -82,9 +89,9 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Commands::ApproveEdits {} => {
+        Commands::ApproveEdits { all, paths } => {
             log::debug!("Approving edits");
-            if let Err(e) = cmd::lint::approve() {
+            if let Err(e) = cmd::lint::approve(*all, paths) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

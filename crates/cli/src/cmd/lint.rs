@@ -33,18 +33,37 @@ pub fn lint() -> Result<()> {
     }
 
     println!("💡 Suggested actions:");
-    println!("   1. Review the dependent files listed above");
-    println!("   2. Update them if needed, or");
-    println!("   3. Run `mddb-cli approve-edits` to mark them as reviewed\n");
+    println!("   1. Update them if needed, or");
+    println!("   2. Run `mddb-cli approve-edits` to mark them as reviewed\n");
 
     println!("{} issue(s) found.", diags.len());
     std::process::exit(1);
 }
 
-pub fn approve() -> Result<()> {
+pub fn approve(all: bool, paths: &[String]) -> Result<()> {
+    if !all && paths.is_empty() {
+        println!("Usage: mddb-cli approve-edits [OPTIONS] [PATHS]...\n");
+        println!("Approve stale references for specific files or all files.\n");
+        println!("Options:");
+        println!("  --all    Approve all stale references");
+        println!("\nArguments:");
+        println!("  [PATHS]...  Specific file or folder paths to approve\n");
+        println!("Examples:");
+        println!("  mddb-cli approve-edits --all");
+        println!("  mddb-cli approve-edits path/to/file.md");
+        println!("  mddb-cli approve-edits path/to/folder/");
+        return Ok(());
+    }
+
     let project = mddb::MDDBProject::new(".")?;
     project.refresh()?;
-    let n = mddb::approve_edits(project.get_conn())?;
+    
+    let n = if all {
+        mddb::approve_edits(project.get_conn(), None)?
+    } else {
+        mddb::approve_edits(project.get_conn(), Some(paths))?
+    };
+    
     println!("Approved {} link(s).", n);
     Ok(())
 }

@@ -65,11 +65,29 @@ pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
     Ok(all)
 }
 
-pub fn approve_edits(conn: &Connection) -> Result<usize> {
-    let rows = conn.execute(
-        "UPDATE links SET pinned_version = (SELECT version FROM documents WHERE path = links.to_id)
-         WHERE pinned_version < (SELECT version FROM documents WHERE path = links.to_id)",
-        []
-    )?;
+pub fn approve_edits(conn: &Connection, paths: Option<&[String]>) -> Result<usize> {
+    let rows = match paths {
+        None => {
+            // Approve all stale references
+            conn.execute(
+                "UPDATE links SET pinned_version = (SELECT version FROM documents WHERE path = links.to_id)
+                 WHERE pinned_version < (SELECT version FROM documents WHERE path = links.to_id)",
+                []
+            )?
+        }
+        Some(paths) if paths.is_empty() => 0,
+        Some(paths) => {
+            // Approve only links TO the specified paths
+            let placeholders: Vec<String> = paths.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
+            let sql = format!(
+                "UPDATE links SET pinned_version = (SELECT version FROM documents WHERE path = links.to_id)
+                 WHERE pinned_version < (SELECT version FROM documents WHERE path = links.to_id)
+                 AND links.to_id IN ({})",
+                placeholders.join(", ")
+            );
+            let params: Vec<&dyn rusqlite::ToSql> = paths.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+            conn.execute(&sql, params.as_slice())?
+        }
+    };
     Ok(rows)
 }
