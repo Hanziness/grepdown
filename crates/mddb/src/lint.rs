@@ -40,7 +40,7 @@ impl Lint for StaleRef {
 
         let rows = stmt.query_map([], |row| {
             Ok(Diagnostic {
-                lint_id: "stale-ref",
+                lint_id: self.id(),
                 severity: Severity::Warning,
                 from_path: row.get(0)?,
                 to_path: row.get(1)?,
