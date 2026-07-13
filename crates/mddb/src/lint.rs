@@ -6,13 +6,19 @@ pub enum Severity {
     Warning,
 }
 
+pub enum LintData {
+    StaleRef {
+        pinned_version: i64,
+        current_version: i64,
+    },
+}
+
 pub struct Diagnostic {
     pub lint_id: &'static str,
     pub severity: Severity,
     pub from_path: String,
     pub to_path: String,
-    pub pinned_version: i64,
-    pub current_version: i64,
+    pub data: LintData,
 }
 
 pub trait Lint {
@@ -51,8 +57,10 @@ impl Lint for StaleRef {
                 severity: Severity::Warning,
                 from_path: row.get(0)?,
                 to_path: row.get(1)?,
-                pinned_version: row.get(2)?,
-                current_version: row.get(3)?,
+                data: LintData::StaleRef {
+                    pinned_version: row.get(2)?,
+                    current_version: row.get(3)?,
+                },
             })
         })?;
 
@@ -146,8 +154,12 @@ mod tests {
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].from_path, "/a.md");
         assert_eq!(diags[0].to_path, "/b.md");
-        assert_eq!(diags[0].pinned_version, 1);
-        assert_eq!(diags[0].current_version, 2);
+        match &diags[0].data {
+            LintData::StaleRef { pinned_version, current_version } => {
+                assert_eq!(*pinned_version, 1);
+                assert_eq!(*current_version, 2);
+            }
+        }
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use mddb::{Lint, StaleRef};
+use mddb::{Lint, LintData, StaleRef};
 
 pub fn lint() -> Result<()> {
     let project = mddb::MDDBProject::new(".")?;
@@ -35,10 +35,17 @@ pub fn lint() -> Result<()> {
             }
 
             for (updated_file, deps) in &by_updated {
-                println!("📄 {} (version {})", updated_file, deps[0].current_version);
+                // Extract version info from LintData::StaleRef
+                let current_version = match &deps[0].data {
+                    LintData::StaleRef { current_version, .. } => *current_version,
+                };
+                println!("📄 {} (version {})", updated_file, current_version);
                 println!("   └─ Referenced by:");
                 for dep in deps {
-                    println!("      • {} (pinned at version {})", dep.from_path, dep.pinned_version);
+                    let pinned_version = match &dep.data {
+                        LintData::StaleRef { pinned_version, .. } => *pinned_version,
+                    };
+                    println!("      • {} (pinned at version {})", dep.from_path, pinned_version);
                 }
                 println!();
             }
