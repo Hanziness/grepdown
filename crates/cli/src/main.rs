@@ -35,7 +35,13 @@ enum Commands {
     },
 
     /// Explicitly index the folder
-    Index {}
+    Index {},
+
+    /// Run lints on the knowledge base
+    Lint {},
+
+    /// Approve all stale references
+    ApproveEdits {},
 }
 
 fn main() {
@@ -68,6 +74,20 @@ fn main() {
             log::debug!("Indexing folder");
             let project = mddb::MDDBProject::new(".").unwrap();
             project.refresh().unwrap();
-        }
+        },
+        Commands::Lint {} => {
+            log::debug!("Running lints");
+            if let Err(e) = cmd::lint::lint() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::ApproveEdits {} => {
+            log::debug!("Approving edits");
+            if let Err(e) = cmd::lint::approve() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        },
     }
 }
