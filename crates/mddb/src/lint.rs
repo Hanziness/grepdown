@@ -67,7 +67,8 @@ pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
 
 pub fn approve_edits(conn: &Connection) -> Result<usize> {
     let rows = conn.execute(
-        "UPDATE links SET pinned_version = (SELECT version FROM documents WHERE path = links.to_id)",
+        "UPDATE links SET pinned_version = (SELECT version FROM documents WHERE path = links.to_id)
+         WHERE pinned_version < (SELECT version FROM documents WHERE path = links.to_id)",
         []
     )?;
     Ok(rows)
