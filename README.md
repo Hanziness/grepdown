@@ -56,7 +56,7 @@ mddb-cli search "async runtime" --no-refresh
 | `init` | Initialize and index all `.md` files in the current directory |
 | `index` | Re-index (refresh) the database |
 | `search <query>` | Search indexed files (auto-refreshes by default) |
-| `lint` | Run lints on the knowledge base (exit 0 = issues found, 1 = clean) |
+| `lint` | Run lints on the knowledge base (exit 0 = clean, 1 = issues found) |
 | `approve-edits` | Approve all stale references by updating pinned versions |
 
 ### Search Options

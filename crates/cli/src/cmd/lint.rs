@@ -7,7 +7,7 @@ pub fn lint() -> Result<()> {
 
     if diags.is_empty() {
         println!("No lint issues found.");
-        std::process::exit(1);
+        std::process::exit(0);
     }
 
     for d in &diags {
@@ -19,7 +19,7 @@ pub fn lint() -> Result<()> {
     }
 
     println!("\n{} issue(s) found.", diags.len());
-    std::process::exit(0);
+    std::process::exit(1);
 }
 
 pub fn approve() -> Result<()> {
