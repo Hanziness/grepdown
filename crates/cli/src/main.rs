@@ -47,6 +47,7 @@ enum Commands {
         all: bool,
 
         /// Specific file or folder paths to approve
+        #[arg(required_unless_present = "all")]
         paths: Vec<String>,
     },
 }
