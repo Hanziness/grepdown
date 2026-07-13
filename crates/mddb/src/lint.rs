@@ -14,13 +14,9 @@ pub struct Diagnostic {
     pub message: String,
 }
 
-pub struct LintContext<'a> {
-    conn: &'a Connection,
-}
-
 pub trait Lint {
     fn id(&self) -> &'static str;
-    fn check(&self, ctx: &LintContext) -> Result<Vec<Diagnostic>>;
+    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>>;
 }
 
 pub struct StaleRef;
@@ -30,8 +26,8 @@ impl Lint for StaleRef {
         "stale-ref"
     }
 
-    fn check(&self, ctx: &LintContext) -> Result<Vec<Diagnostic>> {
-        let mut stmt = ctx.conn.prepare(
+    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
+        let mut stmt = conn.prepare(
             "SELECT l.from_id, l.to_id, l.pinned_version, d.version
              FROM links l
              JOIN documents d ON l.to_id = d.path
@@ -61,11 +57,10 @@ impl Lint for StaleRef {
 }
 
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
-    let ctx = LintContext { conn };
     let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef)];
     let mut all = Vec::new();
     for lint in lints {
-        all.extend(lint.check(&ctx)?);
+        all.extend(lint.check(conn)?);
     }
     Ok(all)
 }
