@@ -14,6 +14,7 @@ Supports the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatfor
 - **Parallel processing**. Reads and parses files concurrently
 - **Tag search**. Extracts YAML frontmatter tags and searches them alongside body text
 - **Link graph**. Forward links, backlinks, citations, and BFS reachability traversal
+- **Linting**. Detects stale references when linked documents change, with approval workflow
 - **Highlighted snippets**. ANSI-colored context snippets with match highlighting
 - **Zero config**. Just run it in any directory of Markdown files
 
@@ -55,6 +56,8 @@ mddb-cli search "async runtime" --no-refresh
 | `init` | Initialize and index all `.md` files in the current directory |
 | `index` | Re-index (refresh) the database |
 | `search <query>` | Search indexed files (auto-refreshes by default) |
+| `lint` | Run lints on the knowledge base (exit 0 = issues found, 1 = clean) |
+| `approve-edits` | Approve all stale references by updating pinned versions |
 
 ### Search Options
 
@@ -100,6 +103,51 @@ mddb supports the Open Knowledge Format by:
 - Enabling graph traversal (forward links, backlinks, reachability)
 
 This turns a folder of Markdown files into a queryable knowledge base.
+
+## Linting
+
+mddb tracks document versions and detects when links become stale. When you link from document A to document B, mddb pins the version of B at link time. If B changes later, the link is flagged as stale until you explicitly approve it.
+
+### Example workflow
+
+```bash
+# Initial setup - index your knowledge base
+mddb-cli index
+
+# Check for lint issues (stale references)
+mddb-cli lint
+# Output: No lint issues found.
+
+# Edit a document that other documents link to
+echo "# Updated content" >> doc-b.md
+
+# Re-index to detect changes
+mddb-cli index
+
+# Check for stale references
+mddb-cli lint
+# Output:
+# WARNING: pinned version 1 is behind current version 2 (/path/to/doc-a.md → /path/to/doc-b.md)
+#
+# 1 issue(s) found.
+
+# Review the changes in doc-b.md, then approve all stale references
+mddb-cli approve-edits
+# Output: Approved 1 link(s).
+
+# Verify no more issues
+mddb-cli lint
+# Output: No lint issues found.
+```
+
+### How it works
+
+- Each document has a `version` counter that increments when its content changes
+- When a link is created, it captures the target's current version as `pinned_version`
+- A link is stale when `pinned_version < current_version`
+- `approve-edits` updates all pinned versions to match current versions
+
+This is useful for knowledge bases where you want to track when referenced content has changed and needs review.
 
 ## License
 
