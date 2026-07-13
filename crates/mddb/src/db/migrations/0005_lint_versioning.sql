@@ -1,0 +1,3 @@
+ALTER TABLE documents ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE links ADD COLUMN pinned_version INTEGER NOT NULL DEFAULT 0;
+INSERT INTO schema_migrations (version) VALUES (5) ON CONFLICT(version) DO NOTHING;
