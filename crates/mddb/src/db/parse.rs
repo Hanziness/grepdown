@@ -11,7 +11,7 @@ use crate::frontmatter::{parse_frontmatter, extract_tags};
 const STMT_MTIME: &str = "SELECT path, mtime, content_hash FROM documents";
 const STMT_DEL_FTS: &str = "DELETE FROM documents_fts WHERE path = ?1";
 const STMT_INS_FTS: &str = "INSERT INTO documents_fts (path, body) VALUES (?1, ?2)";
-const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) VALUES (?1, ?2, ?3) ON CONFLICT(path) DO UPDATE SET mtime = excluded.mtime, content_hash = excluded.content_hash";
+const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) VALUES (?1, ?2, ?3) ON CONFLICT(path) DO UPDATE SET mtime = excluded.mtime, content_hash = excluded.content_hash, version = CASE WHEN content_hash != excluded.content_hash THEN version + 1 ELSE version END";
 const STMT_DEL_TAGS: &str = "DELETE FROM tags_fts WHERE path = ?1";
 const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
 const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
