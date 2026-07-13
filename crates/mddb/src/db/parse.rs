@@ -15,7 +15,7 @@ const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) V
 const STMT_DEL_TAGS: &str = "DELETE FROM tags_fts WHERE path = ?1";
 const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
 const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
-const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target) VALUES (?1, ?2, ?3)";
+const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target, pinned_version) VALUES (?1, ?2, ?3, (SELECT version FROM documents WHERE path = ?2))";
 const STMT_DEL_CITATIONS: &str = "DELETE FROM citations WHERE from_id = ?1";
 const STMT_INS_CITATION: &str = "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
 
