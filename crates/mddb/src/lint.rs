@@ -16,6 +16,8 @@ pub struct Diagnostic {
 
 pub trait Lint {
     fn id(&self) -> &'static str;
+    fn title(&self) -> &'static str;
+    fn suggestions(&self) -> &'static str;
     fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>>;
 }
 
@@ -24,6 +26,14 @@ pub struct StaleRef;
 impl Lint for StaleRef {
     fn id(&self) -> &'static str {
         "stale-ref"
+    }
+
+    fn title(&self) -> &'static str {
+        "STALE REFERENCES DETECTED"
+    }
+
+    fn suggestions(&self) -> &'static str {
+        "💡 Suggested actions:\n   1. Review the dependent files listed above\n   2. Update them if needed, or\n   3. Run `mddb-cli approve-edits` to mark them as reviewed"
     }
 
     fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
