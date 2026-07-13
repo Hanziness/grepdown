@@ -24,6 +24,7 @@ pub fn lint() -> Result<()> {
 
 pub fn approve() -> Result<()> {
     let project = mddb::MDDBProject::new(".")?;
+    project.refresh()?;
     let n = mddb::approve_edits(project.get_conn())?;
     println!("Approved {} link(s).", n);
     Ok(())
