@@ -57,7 +57,7 @@ impl Lint for StaleRef {
 }
 
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
-    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef)];
+    let lints: &[&dyn Lint] = &[&StaleRef];
     let mut all = Vec::new();
     for lint in lints {
         all.extend(lint.check(conn)?);
