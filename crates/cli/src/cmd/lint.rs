@@ -28,20 +28,17 @@ pub fn lint() -> Result<()> {
             println!("⚠️  {}\n", lint.title());
             println!("The following files were updated, but their dependents may need review:\n");
 
-            // Group by updated file (to_path)
-            let mut by_updated: HashMap<String, Vec<&&mddb::Diagnostic>> = HashMap::new();
+            // Group by updated file (to_path) using &str keys to avoid cloning
+            let mut by_updated: HashMap<&str, Vec<&&mddb::Diagnostic>> = HashMap::new();
             for d in lint_diags {
-                by_updated.entry(d.to_path.clone()).or_default().push(d);
+                by_updated.entry(d.to_path.as_str()).or_default().push(d);
             }
 
             for (updated_file, deps) in &by_updated {
-                // Extract version from first diagnostic's message
-                let version_info = deps[0].message.split("version ").nth(2).unwrap_or("?");
-                println!("📄 {} (version {})", updated_file, version_info.trim());
+                println!("📄 {} (version {})", updated_file, deps[0].current_version);
                 println!("   └─ Referenced by:");
                 for dep in deps {
-                    let pinned_ver = dep.message.split("version ").nth(1).and_then(|s| s.split(" is").next()).unwrap_or("?");
-                    println!("      • {} (pinned at version {})", dep.from_path, pinned_ver);
+                    println!("      • {} (pinned at version {})", dep.from_path, dep.pinned_version);
                 }
                 println!();
             }
@@ -73,9 +70,9 @@ pub fn approve(all: bool, paths: &[String]) -> Result<()> {
     project.refresh()?;
     
     let n = if all {
-        mddb::approve_edits(project.get_conn(), None)?
+        mddb::approve_edits(project.get_conn(), &[])?
     } else {
-        mddb::approve_edits(project.get_conn(), Some(paths))?
+        mddb::approve_edits(project.get_conn(), paths)?
     };
     
     println!("Approved {} link(s).", n);

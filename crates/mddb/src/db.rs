@@ -6,6 +6,9 @@ use crate::error::Result;
 mod init;
 mod parse;
 
+#[cfg(test)]
+pub use init::bootstrap;
+
 pub const DB_PATH: &str = "md.db";
 
 /** Start the database engine at the default location */
