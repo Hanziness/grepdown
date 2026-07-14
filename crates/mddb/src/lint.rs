@@ -40,7 +40,7 @@ impl Lint for StaleRef {
     }
 
     fn suggestions(&self) -> &'static str {
-        "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `mddb-cli approve-edits <filenames>` to mark them as reviewed"
+        "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `grepdown approve-edits <filenames>` to mark them as reviewed"
     }
 
     fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {

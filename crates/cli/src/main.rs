@@ -15,7 +15,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize mddb in the folder
+    /// Initialize grepdown in the folder
     Init {
 
     },
@@ -68,7 +68,7 @@ fn main() {
 
     match &cli.command {
         Commands::Init {  } => {
-            log::debug!("Initializing mddb");
+            log::debug!("Initializing grepdown");
             cmd::init::init();
         },
         Commands::Search { query, limit, no_refresh } => {

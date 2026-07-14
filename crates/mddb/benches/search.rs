@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().expect("mddb should be nested inside a workspace")
+        .parent().expect("grepdown should be nested inside a workspace")
         .parent().expect("workspace root should exist")
         .to_path_buf()
 }
