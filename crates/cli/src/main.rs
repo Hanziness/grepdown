@@ -38,7 +38,11 @@ enum Commands {
     Index {},
 
     /// Run lints on the knowledge base
-    Lint {},
+    Lint {
+        /// Output results as JSON
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Approve stale references for specific files or all files
     ApproveEdits {
@@ -83,9 +87,9 @@ fn main() {
             let project = grepdown_lib::MDDBProject::new(".").unwrap();
             project.refresh().unwrap();
         },
-        Commands::Lint {} => {
+        Commands::Lint { json } => {
             log::debug!("Running lints");
-            if let Err(e) = cmd::lint::lint() {
+            if let Err(e) = cmd::lint::lint(*json) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -1,11 +1,16 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use grepdown_lib::{Lint, LintData, StaleRef, Orphan};
+use grepdown_lib::{Lint, LintId, StaleRef, Orphan};
 
-pub fn lint() -> Result<()> {
+pub fn lint(json: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::new(".")?;
     project.refresh()?;
     let diags = grepdown_lib::run_lints(project.get_conn())?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&diags)?);
+        std::process::exit(if diags.is_empty() { 0 } else { 1 });
+    }
 
     if diags.is_empty() {
         println!("No lint issues found.");
@@ -14,10 +19,10 @@ pub fn lint() -> Result<()> {
 
     // Build lint registry
     let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef), Box::new(Orphan)];
-    let lint_map: HashMap<&str, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
+    let lint_map: HashMap<LintId, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
 
     // Group by lint_id
-    let mut by_lint: HashMap<&str, Vec<&grepdown_lib::Diagnostic>> = HashMap::new();
+    let mut by_lint: HashMap<LintId, Vec<&grepdown_lib::Diagnostic>> = HashMap::new();
     for d in &diags {
         by_lint.entry(d.lint_id).or_default().push(d);
     }
@@ -26,45 +31,7 @@ pub fn lint() -> Result<()> {
     for (lint_id, lint_diags) in &by_lint {
         if let Some(lint) = lint_map.get(lint_id) {
             println!("⚠️  {}\n", lint.title());
-
-            match *lint_id {
-                "orphan" => {
-                    for d in lint_diags {
-                        match &d.data {
-                            LintData::Orphan => {
-                                println!("  - {}", d.from_path);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {
-                    println!("The following files were updated, but their dependents may need review:\n");
-
-                    // Group by updated file (to_path) using &str keys to avoid cloning
-                    let mut by_updated: HashMap<&str, Vec<&&grepdown_lib::Diagnostic>> = HashMap::new();
-                    for d in lint_diags {
-                        by_updated.entry(d.to_path.as_str()).or_default().push(d);
-                    }
-
-                    for (updated_file, deps) in &by_updated {
-                        // Extract version info from LintData::StaleRef
-                        let current_version = match &deps[0].data {
-                            LintData::StaleRef { current_version, .. } => *current_version,
-                        };
-                        println!("📄 {} (version {})", updated_file, current_version);
-                        println!("   └─ Referenced by:");
-                        for dep in deps {
-                            let pinned_version = match &dep.data {
-                                LintData::StaleRef { pinned_version, .. } => *pinned_version,
-                            };
-                            println!("      • {} (pinned at version {})", dep.from_path, pinned_version);
-                        }
-                        println!();
-                    }
-                }
-            }
-
+            println!("{}", lint.format_group(lint_diags));
             println!("{}\n", lint.suggestions());
         }
     }

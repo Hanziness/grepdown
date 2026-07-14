@@ -432,6 +432,7 @@ dependencies = [
  "env_logger",
  "grepdown-lib",
  "log",
+ "serde_json",
 ]
 
 [[package]]
@@ -444,6 +445,7 @@ dependencies = [
  "pulldown-cmark",
  "rayon",
  "rusqlite",
+ "serde",
  "serde_yaml",
  "thiserror",
  "walkdir",

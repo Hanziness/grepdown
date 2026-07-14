@@ -1,11 +1,29 @@
 use rusqlite::Connection;
+use serde::Serialize;
 use crate::error::Result;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub enum LintId {
+    StaleRef,
+    Orphan,
+}
+
+impl LintId {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LintId::StaleRef => "stale-ref",
+            LintId::Orphan => "orphan",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Severity {
     Error,
     Warning,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum LintData {
     StaleRef {
         pinned_version: i64,
@@ -14,8 +32,9 @@ pub enum LintData {
     Orphan,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Diagnostic {
-    pub lint_id: &'static str,
+    pub lint_id: LintId,
     pub severity: Severity,
     pub from_path: String,
     pub to_path: String,
@@ -23,17 +42,18 @@ pub struct Diagnostic {
 }
 
 pub trait Lint {
-    fn id(&self) -> &'static str;
+    fn id(&self) -> LintId;
     fn title(&self) -> &'static str;
     fn suggestions(&self) -> &'static str;
     fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>>;
+    fn format_group(&self, diags: &[&Diagnostic]) -> String;
 }
 
 pub struct StaleRef;
 
 impl Lint for StaleRef {
-    fn id(&self) -> &'static str {
-        "stale-ref"
+    fn id(&self) -> LintId {
+        LintId::StaleRef
     }
 
     fn title(&self) -> &'static str {
@@ -71,13 +91,43 @@ impl Lint for StaleRef {
         }
         Ok(diags)
     }
+
+    fn format_group(&self, diags: &[&Diagnostic]) -> String {
+        let mut out = String::new();
+        out.push_str("The following files were updated, but their dependents may need review:\n\n");
+
+        // Group by updated file (to_path)
+        let mut by_updated: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+        for d in diags {
+            by_updated.entry(d.to_path.as_str()).or_default().push(d);
+        }
+
+        for (updated_file, deps) in &by_updated {
+            let current_version = match &deps[0].data {
+                LintData::StaleRef { current_version, .. } => *current_version,
+                _ => unreachable!(),
+            };
+            out.push_str(&format!("📄 {} (version {})\n", updated_file, current_version));
+            out.push_str("   └─ Referenced by:\n");
+            for dep in deps {
+                let pinned_version = match &dep.data {
+                    LintData::StaleRef { pinned_version, .. } => *pinned_version,
+                    _ => unreachable!(),
+                };
+                out.push_str(&format!("      • {} (pinned at version {})\n", dep.from_path, pinned_version));
+            }
+            out.push('\n');
+        }
+
+        out
+    }
 }
 
 pub struct Orphan;
 
 impl Lint for Orphan {
-    fn id(&self) -> &'static str {
-        "orphan"
+    fn id(&self) -> LintId {
+        LintId::Orphan
     }
 
     fn title(&self) -> &'static str {
@@ -102,7 +152,7 @@ impl Lint for Orphan {
         let rows = stmt.query_map([], |row| {
             let path: String = row.get(0)?;
             Ok(Diagnostic {
-                lint_id: "orphan",
+                lint_id: LintId::Orphan,
                 severity: Severity::Warning,
                 from_path: path.clone(),
                 to_path: path,
@@ -115,6 +165,14 @@ impl Lint for Orphan {
             diags.push(row?);
         }
         Ok(diags)
+    }
+
+    fn format_group(&self, diags: &[&Diagnostic]) -> String {
+        let mut out = String::new();
+        for d in diags {
+            out.push_str(&format!("  - {}\n", d.from_path));
+        }
+        out
     }
 }
 
@@ -205,6 +263,7 @@ mod tests {
                 assert_eq!(*pinned_version, 1);
                 assert_eq!(*current_version, 2);
             }
+            _ => unreachable!(),
         }
     }
 
@@ -277,9 +336,11 @@ mod tests {
 
         let diags = run_lints(&conn).unwrap();
         // Filter only orphan diagnostics
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
         assert_eq!(orphan_diags.len(), 2);
-        assert_eq!(orphan_diags[0].from_path, "orphan.md");
+        let mut paths: Vec<&str> = orphan_diags.iter().map(|d| d.from_path.as_str()).collect();
+        paths.sort();
+        assert_eq!(paths, vec!["another-orphan.md", "orphan.md"]);
         match &orphan_diags[0].data {
             LintData::Orphan => {}
             _ => panic!("expected Orphan data"),
@@ -294,7 +355,7 @@ mod tests {
         insert_test_link(&conn, "doc-a.md", "doc-b.md", 1);
 
         let diags = run_lints(&conn).unwrap();
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
         assert_eq!(orphan_diags.len(), 0);
     }
 
@@ -306,7 +367,7 @@ mod tests {
         insert_test_link(&conn, "source.md", "target.md", 1);
 
         let diags = run_lints(&conn).unwrap();
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
         assert_eq!(orphan_diags.len(), 0);
     }
 }
