@@ -268,4 +268,45 @@ mod tests {
         ).unwrap();
         assert_eq!(pinned_c, 1);
     }
+
+    #[test]
+    fn orphan_detection() {
+        let conn = setup_test_db();
+        insert_test_document(&conn, "orphan.md", 1);
+        insert_test_document(&conn, "another-orphan.md", 1);
+
+        let diags = run_lints(&conn).unwrap();
+        // Filter only orphan diagnostics
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        assert_eq!(orphan_diags.len(), 2);
+        assert_eq!(orphan_diags[0].from_path, "orphan.md");
+        match &orphan_diags[0].data {
+            LintData::Orphan => {}
+            _ => panic!("expected Orphan data"),
+        }
+    }
+
+    #[test]
+    fn non_orphan_with_outgoing_link() {
+        let conn = setup_test_db();
+        insert_test_document(&conn, "doc-a.md", 1);
+        insert_test_document(&conn, "doc-b.md", 1);
+        insert_test_link(&conn, "doc-a.md", "doc-b.md", 1);
+
+        let diags = run_lints(&conn).unwrap();
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        assert_eq!(orphan_diags.len(), 0);
+    }
+
+    #[test]
+    fn non_orphan_with_incoming_link() {
+        let conn = setup_test_db();
+        insert_test_document(&conn, "source.md", 1);
+        insert_test_document(&conn, "target.md", 1);
+        insert_test_link(&conn, "source.md", "target.md", 1);
+
+        let diags = run_lints(&conn).unwrap();
+        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == "orphan").collect();
+        assert_eq!(orphan_diags.len(), 0);
+    }
 }
