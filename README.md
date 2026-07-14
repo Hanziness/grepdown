@@ -1,14 +1,14 @@
-# mddb
+# grepdown
 
-**Instant full-text search across thousands of Markdown files.**
+**Knowledge base management for Markdown — search, link, and lint.**
 
-mddb indexes your `.md` files into a local SQLite FTS5 database and lets you query them with rich search syntax. Built for humans and AI agents alike — zero config, fast incremental indexing, and link graph traversal out of the box.
+grepdown turns a folder of Markdown files into a queryable knowledge base. It indexes your `.md` files into a local SQLite FTS5 database and lets you search, traverse link graphs, and detect stale references. Built for humans and AI agents alike — zero config, fast incremental indexing, and out-of-the-box OKF support.
 
 Supports the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) through frontmatter tags and link graphs.
 
 ## Features
 
-- **AI-compatible**. Easy-to-use CLI for both humans and AI agents to search knowledge bases
+- **AI-compatible**. Easy-to-use CLI for both humans and AI agents to manage and search knowledge bases
 - **Full-text search**. SQLite FTS5 with Porter stemming, BM25 ranking, and phrase/prefix/NEAR queries
 - **Incremental indexing**. Only re-processes changed files (mtime + blake3 content hashing)
 - **Parallel processing**. Reads and parses files concurrently
@@ -22,13 +22,13 @@ Supports the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatfor
 
 ```bash
 # From source (requires Rust toolchain)
-git clone https://github.com/Hanziness/mddb && cd mddb
+git clone https://github.com/Hanziness/grepdown && cd grepdown
 cargo build --release
 
 # Install the binary
 cargo install --path .
 # or manually:
-cp target/release/mddb-cli ~/.local/bin/
+cp target/release/grepdown ~/.local/bin/
 ```
 
 No system SQLite required — it's already bundled.
@@ -37,16 +37,16 @@ No system SQLite required — it's already bundled.
 
 ```bash
 # Index and search in one step (auto-initializes on first run)
-mddb-cli search "deployment guide"
+grepdown search "deployment guide"
 
 # Explicitly (re-)index the current directory
-mddb-cli init
+grepdown init
 
 # Search with a result limit
-mddb-cli search "error handling" --limit 10
+grepdown search "error handling" --limit 10
 
 # Skip re-indexing before search (faster if index is fresh)
-mddb-cli search "async runtime" --no-refresh
+grepdown search "async runtime" --no-refresh
 ```
 
 ## Commands
@@ -74,7 +74,7 @@ mddb-cli search "async runtime" --no-refresh
 
 ## Search Syntax
 
-mddb uses SQLite FTS5 query syntax:
+grepdown uses SQLite FTS5 query syntax:
 
 ```
 deployment guide          # all words must match
@@ -92,11 +92,11 @@ NEAR(server client, 5)    # words within 5 tokens
 4. **Index** — bulk-inserts into SQLite FTS5 in a single transaction
 5. **Search** — queries both body and tag indexes, returns BM25-ranked results with snippets
 
-The database lives at `md.db` in your project root (gitignored by convention).
+The database lives at `grepdown.db` in your project root (gitignored by convention).
 
 ## OKF Support
 
-mddb supports the Open Knowledge Format by:
+grepdown supports the Open Knowledge Format by:
 
 - Parsing `tags` arrays from YAML frontmatter
 - Building a link graph from internal Markdown links
@@ -106,37 +106,37 @@ This turns a folder of Markdown files into a queryable knowledge base.
 
 ## Linting
 
-mddb tracks document versions and detects when links become stale. When you link from document A to document B, mddb pins the version of B at link time. If B changes later, the link is flagged as stale until you explicitly approve it.
+grepdown tracks document versions and detects when links become stale. When you link from document A to document B, grepdown pins the version of B at link time. If B changes later, the link is flagged as stale until you explicitly approve it.
 
 ### Example workflow
 
 ```bash
 # Initial setup - index your knowledge base
-mddb-cli index
+grepdown index
 
 # Check for lint issues (stale references)
-mddb-cli lint
+grepdown lint
 # Output: No lint issues found.
 
 # Edit a document that other documents link to
 echo "# Updated content" >> doc-b.md
 
 # Re-index to detect changes
-mddb-cli index
+grepdown index
 
 # Check for stale references
-mddb-cli lint
+grepdown lint
 # Output:
 # WARNING: pinned version 1 is behind current version 2 (/path/to/doc-a.md → /path/to/doc-b.md)
 #
 # 1 issue(s) found.
 
 # Review the changes in doc-b.md, then approve all stale references
-mddb-cli approve-edits
+grepdown approve-edits
 # Output: Approved 1 link(s).
 
 # Verify no more issues
-mddb-cli lint
+grepdown lint
 # Output: No lint issues found.
 ```
 
