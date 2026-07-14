@@ -11,6 +11,7 @@ pub enum LintData {
         pinned_version: i64,
         current_version: i64,
     },
+    Orphan,
 }
 
 pub struct Diagnostic {
@@ -61,6 +62,51 @@ impl Lint for StaleRef {
                     pinned_version: row.get(2)?,
                     current_version: row.get(3)?,
                 },
+            })
+        })?;
+
+        let mut diags = Vec::new();
+        for row in rows {
+            diags.push(row?);
+        }
+        Ok(diags)
+    }
+}
+
+pub struct Orphan;
+
+impl Lint for Orphan {
+    fn id(&self) -> &'static str {
+        "orphan"
+    }
+
+    fn title(&self) -> &'static str {
+        "ORPHAN DOCUMENTS DETECTED"
+    }
+
+    fn suggestions(&self) -> &'static str {
+        "💡 These documents have no links. Consider:\n   \
+         1. Adding links to related documents\n   \
+         2. Linking from other documents to these\n   \
+         3. Deleting if they're no longer needed"
+    }
+
+    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
+        let mut stmt = conn.prepare(
+            "SELECT d.path
+             FROM documents d
+             WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = d.path)
+               AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = d.path)"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            let path: String = row.get(0)?;
+            Ok(Diagnostic {
+                lint_id: "orphan",
+                severity: Severity::Warning,
+                from_path: path.clone(),
+                to_path: path,
+                data: LintData::Orphan,
             })
         })?;
 
