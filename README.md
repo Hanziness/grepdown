@@ -2,14 +2,12 @@
 
 **Knowledge base management for Markdown — search, link, and lint.**
 
-grepdown turns a folder of Markdown files into a queryable knowledge base. It indexes your `.md` files into a local SQLite FTS5 database and lets you search, traverse link graphs, and detect stale references. Built for humans and AI agents alike — zero config, fast incremental indexing, and out-of-the-box OKF support.
-
-Supports the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) through frontmatter tags and link graphs.
+**grepdown** turns a folder of Markdown files into a queryable knowledge base. It indexes your `.md` files and lets you search, traverse link graphs, and detect stale references. Built for humans and AI agents alike — zero config, fast incremental indexing, and out-of-the-box [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) support.
 
 ## Features
 
 - **AI-compatible**. Easy-to-use CLI for both humans and AI agents to manage and search knowledge bases
-- **Full-text search**. SQLite FTS5 with Porter stemming, BM25 ranking, and phrase/prefix/NEAR queries
+- **Full-text search**. SQLite FTS5 with BM25 ranking and phrase/prefix/NEAR queries
 - **Incremental indexing**. Only re-processes changed files (mtime + blake3 content hashing)
 - **Parallel processing**. Reads and parses files concurrently
 - **Tag search**. Extracts YAML frontmatter tags and searches them alongside body text
