@@ -119,7 +119,7 @@ impl Lint for Orphan {
 }
 
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
-    let lints: &[&dyn Lint] = &[&StaleRef];
+    let lints: &[&dyn Lint] = &[&StaleRef, &Orphan];
     let mut all = Vec::new();
     for lint in lints {
         all.extend(lint.check(conn)?);
