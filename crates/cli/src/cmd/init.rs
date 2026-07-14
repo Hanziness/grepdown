@@ -1,5 +1,5 @@
 pub fn init() {
-    let res = mddb::MDDBProject::new(".".to_string());
+    let res = grepdown_lib::MDDBProject::new(".".to_string());
 
     match res {
         Ok(project) => {

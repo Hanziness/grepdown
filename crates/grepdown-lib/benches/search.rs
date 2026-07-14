@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use mddb::MDDBProject;
+use grepdown_lib::MDDBProject;
 use std::fs;
 use std::path::PathBuf;
 

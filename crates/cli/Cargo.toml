@@ -1,5 +1,5 @@
 [package]
-name = "mddb-cli"
+name = "grepdown"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,4 +8,4 @@ anyhow = "1.0.103"
 clap = { version = "4.6.1", features = ["derive", "env"] }
 env_logger = "0.11"
 log = "0.4"
-mddb = { path = "../mddb" }
+grepdown-lib = { path = "../grepdown-lib" }

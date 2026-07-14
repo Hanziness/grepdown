@@ -22,7 +22,7 @@ The Rust CLI Working Group built the `assert-rs` family specifically for CLI tes
 // ❌ manual approach
 let dir = tempfile::tempdir()?;
 fs::write(dir.path().join("input.md"), "# Title\ncontent")?;
-let output = Command::new("../target/debug/mddb-cli")
+let output = Command::new("../target/debug/grepdown")
     .arg("index")
     .current_dir(dir.path())
     .output()?;
@@ -36,7 +36,7 @@ use predicates::prelude::*;
 let temp = assert_fs::TempDir::new()?;
 temp.child("input.md").write_str("# Title\ncontent")?;
 
-let mut cmd = cargo_bin_cmd!("mddb-cli");
+let mut cmd = cargo_bin_cmd!("grepdown");
 cmd.arg("index").current_dir(temp.path());
 cmd.assert().success();
 
@@ -52,7 +52,7 @@ use cli_test_dir::*;
 
 #[test]
 fn test_index() {
-    let testdir = TestDir::new("mddb-cli", "index");
+    let testdir = TestDir::new("grepdown", "index");
     testdir.create_file("doc.md", "# Hello\nworld");
     
     testdir.cmd()
@@ -81,7 +81,7 @@ bat()
     .stdout(predicate::str::contains("Title"));
 ```
 
-### Recommendation for mddb-cli
+### Recommendation for grepdown
 
 Use **`assert_cmd` + `assert_fs` + `predicates`**. This is the standard trio from the Rust CLI Book, used by cargo itself, and gives you the richest assertion API.
 
@@ -104,7 +104,7 @@ Cargo finds integration tests in `tests/` at the crate root. Each `.rs` file bec
 - `tests/fixtures.rs` → another test binary
 - Files in `tests/common/mod.rs` → shared helpers (not a binary, modules only)
 
-### Recommended layout for mddb-cli
+### Recommended layout for grepdown
 
 ```
 crates/cli/
@@ -140,7 +140,7 @@ crates/cli/
 use assert_fs::TempDir;
 use std::path::Path;
 
-/// Create a temp dir with a basic mddb project structure
+/// Create a temp dir with a basic grepdown project structure
 pub fn setup_project() -> TempDir {
     let temp = TempDir::new().unwrap();
     temp.child("doc1.md")
@@ -210,7 +210,7 @@ fn test_lint_broken_links() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.copy_from("tests/fixtures/broken-links/", &["*.md"]).unwrap();
     
-    let mut cmd = assert_cmd::cargo_bin_cmd!("mddb-cli");
+    let mut cmd = assert_cmd::cargo_bin_cmd!("grepdown");
     cmd.arg("lint").current_dir(temp.path());
     cmd.assert()
         .failure()
@@ -230,7 +230,7 @@ temp.child("doc1.md").write_str("# Doc 1\nContent\n").unwrap();
 temp.child("sub/doc2.md").write_str("# Doc 2\nSee [[Doc 1]]\n").unwrap();
 ```
 
-### Recommendation for mddb-cli
+### Recommendation for grepdown
 
 **Use approach B (fixtures directory) for stable test data and approach C (programmatic) for variation.** Fixture files are easier to review and edit. Use programmatic creation when you need slight variations of the same base data.
 
@@ -254,7 +254,7 @@ fn full_workflow() {
     temp.child("doc2.md").write_str("# Doc Two\n\nSee [[Doc One]] for details.\n").unwrap();
 
     let run = |args: &[&str]| {
-        let mut cmd = cargo_bin_cmd!("mddb-cli");
+        let mut cmd = cargo_bin_cmd!("grepdown");
         cmd.args(args).current_dir(temp.path());
         cmd
     };
@@ -286,7 +286,7 @@ fn workflow_with_stale_references() {
     temp.child("doc1.md").write_str("# Doc One\n\nSee [[Missing Doc]].\n").unwrap();
 
     let run = |args: &[&str]| {
-        let mut cmd = cargo_bin_cmd!("mddb-cli");
+        let mut cmd = cargo_bin_cmd!("grepdown");
         cmd.args(args).current_dir(temp.path());
         cmd
     };
@@ -315,16 +315,16 @@ fn workflow_with_stale_references() {
 For tests with many command invocations, extracting a helper avoids repetition:
 
 ```rust
-fn mddb(temp: &assert_fs::TempDir) -> assert_cmd::Command {
-    let mut cmd = cargo_bin_cmd!("mddb-cli");
+fn grepdown(temp: &assert_fs::TempDir) -> assert_cmd::Command {
+    let mut cmd = cargo_bin_cmd!("grepdown");
     cmd.current_dir(temp.path());
     cmd
 }
 
 // Usage:
-mddb(&temp).arg("init").assert().success();
-mddb(&temp).arg("index").assert().success();
-mddb(&temp).args(["search", "query"]).assert().success();
+grepdown(&temp).arg("init").assert().success();
+grepdown(&temp).arg("index").assert().success();
+grepdown(&temp).args(["search", "query"]).assert().success();
 ```
 
 ---
@@ -342,10 +342,10 @@ use insta::assert_snapshot;
 fn test_search_output() {
     let temp = setup_project();
     // Run init + index
-    mddb(&temp).arg("init").assert().success();
-    mddb(&temp).arg("index").assert().success();
+    grepdown(&temp).arg("init").assert().success();
+    grepdown(&temp).arg("index").assert().success();
     
-    let output = mddb(&temp)
+    let output = grepdown(&temp)
         .args(["search", "doc"])
         .output()
         .unwrap();
@@ -393,7 +393,7 @@ tests/cmd/
 
 **Example `tests/cmd/search.trycmd`:**
 ```console
-$ mddb-cli search "Doc One"
+$ grepdown search "Doc One"
 doc1.md
   # Doc One
   Content of doc one.
@@ -408,7 +408,7 @@ doc2.md
 #[test]
 fn cli_tests() {
     trycmd::TestCases::new()
-        .default_bin_path(trycmd::cargo_bin!("mddb-cli"))
+        .default_bin_path(trycmd::cargo_bin!("grepdown"))
         .case("tests/cmd/*.trycmd");
 }
 ```
@@ -449,7 +449,7 @@ assert_eq!(expected, actual);
 - **trycmd** for testing CLI output where you want human-readable, reviewable test cases
 - **Manual comparison** if you want zero extra dependencies
 
-For mddb-cli, **trycmd** is a good fit for the happy-path tests (test cases double as documentation). Use **assert_cmd + predicates** for edge cases and error paths.
+For grepdown, **trycmd** is a good fit for the happy-path tests (test cases double as documentation). Use **assert_cmd + predicates** for edge cases and error paths.
 
 ---
 
@@ -464,7 +464,7 @@ For mddb-cli, **trycmd** is a good fit for the happy-path tests (test cases doub
 
 ---
 
-## 7. Immediate Recommendations for mddb-cli
+## 7. Immediate Recommendations for grepdown
 
 ### Dependencies to add
 
@@ -506,8 +506,8 @@ pub fn setup_basic_project() -> TempDir {
     temp
 }
 
-pub fn mddb(temp: &TempDir) -> assert_cmd::Command {
-    let mut cmd = cargo_bin_cmd!("mddb-cli");
+pub fn grepdown(temp: &TempDir) -> assert_cmd::Command {
+    let mut cmd = cargo_bin_cmd!("grepdown");
     cmd.current_dir(temp.path());
     cmd
 }
@@ -521,10 +521,10 @@ mod common;
 #[test]
 fn search_finds_document_by_title() {
     let temp = common::setup_basic_project();
-    common::mddb(&temp).arg("init").assert().success();
-    common::mddb(&temp).arg("index").assert().success();
+    common::grepdown(&temp).arg("init").assert().success();
+    common::grepdown(&temp).arg("index").assert().success();
 
-    common::mddb(&temp)
+    common::grepdown(&temp)
         .args(["search", "Alpha"])
         .assert()
         .success()

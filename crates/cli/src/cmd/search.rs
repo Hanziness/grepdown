@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 pub fn search(query: &str, limit: usize, no_refresh: bool) -> Result<()> {
-    let project = mddb::MDDBProject::new(".")
+    let project = grepdown_lib::MDDBProject::new(".")
         .context("Failed to open project")?;
 
     if !no_refresh {

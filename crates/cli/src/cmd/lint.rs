@@ -1,11 +1,11 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use mddb::{Lint, LintData, StaleRef};
+use grepdown_lib::{Lint, LintData, StaleRef};
 
 pub fn lint() -> Result<()> {
-    let project = mddb::MDDBProject::new(".")?;
+    let project = grepdown_lib::MDDBProject::new(".")?;
     project.refresh()?;
-    let diags = mddb::run_lints(project.get_conn())?;
+    let diags = grepdown_lib::run_lints(project.get_conn())?;
 
     if diags.is_empty() {
         println!("No lint issues found.");
@@ -17,7 +17,7 @@ pub fn lint() -> Result<()> {
     let lint_map: HashMap<&str, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
 
     // Group by lint_id
-    let mut by_lint: HashMap<&str, Vec<&mddb::Diagnostic>> = HashMap::new();
+    let mut by_lint: HashMap<&str, Vec<&grepdown_lib::Diagnostic>> = HashMap::new();
     for d in &diags {
         by_lint.entry(d.lint_id).or_default().push(d);
     }
@@ -29,7 +29,7 @@ pub fn lint() -> Result<()> {
             println!("The following files were updated, but their dependents may need review:\n");
 
             // Group by updated file (to_path) using &str keys to avoid cloning
-            let mut by_updated: HashMap<&str, Vec<&&mddb::Diagnostic>> = HashMap::new();
+            let mut by_updated: HashMap<&str, Vec<&&grepdown_lib::Diagnostic>> = HashMap::new();
             for d in lint_diags {
                 by_updated.entry(d.to_path.as_str()).or_default().push(d);
             }
@@ -59,13 +59,13 @@ pub fn lint() -> Result<()> {
 }
 
 pub fn approve(all: bool, paths: &[String]) -> Result<()> {
-    let project = mddb::MDDBProject::new(".")?;
+    let project = grepdown_lib::MDDBProject::new(".")?;
     project.refresh()?;
     
     let n = if all {
-        mddb::approve_edits(project.get_conn(), &[])?
+        grepdown_lib::approve_edits(project.get_conn(), &[])?
     } else {
-        mddb::approve_edits(project.get_conn(), paths)?
+        grepdown_lib::approve_edits(project.get_conn(), paths)?
     };
     
     println!("Approved {} link(s).", n);
