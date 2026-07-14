@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use grepdown_lib::{Lint, LintData, StaleRef};
+use grepdown_lib::{Lint, LintData, StaleRef, Orphan};
 
 pub fn lint() -> Result<()> {
     let project = grepdown_lib::MDDBProject::new(".")?;
@@ -13,7 +13,7 @@ pub fn lint() -> Result<()> {
     }
 
     // Build lint registry
-    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef)];
+    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef), Box::new(Orphan)];
     let lint_map: HashMap<&str, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
 
     // Group by lint_id
@@ -26,28 +26,43 @@ pub fn lint() -> Result<()> {
     for (lint_id, lint_diags) in &by_lint {
         if let Some(lint) = lint_map.get(lint_id) {
             println!("⚠️  {}\n", lint.title());
-            println!("The following files were updated, but their dependents may need review:\n");
 
-            // Group by updated file (to_path) using &str keys to avoid cloning
-            let mut by_updated: HashMap<&str, Vec<&&grepdown_lib::Diagnostic>> = HashMap::new();
-            for d in lint_diags {
-                by_updated.entry(d.to_path.as_str()).or_default().push(d);
-            }
-
-            for (updated_file, deps) in &by_updated {
-                // Extract version info from LintData::StaleRef
-                let current_version = match &deps[0].data {
-                    LintData::StaleRef { current_version, .. } => *current_version,
-                };
-                println!("📄 {} (version {})", updated_file, current_version);
-                println!("   └─ Referenced by:");
-                for dep in deps {
-                    let pinned_version = match &dep.data {
-                        LintData::StaleRef { pinned_version, .. } => *pinned_version,
-                    };
-                    println!("      • {} (pinned at version {})", dep.from_path, pinned_version);
+            match *lint_id {
+                "orphan" => {
+                    for d in lint_diags {
+                        match &d.data {
+                            LintData::Orphan => {
+                                println!("  - {}", d.from_path);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
-                println!();
+                _ => {
+                    println!("The following files were updated, but their dependents may need review:\n");
+
+                    // Group by updated file (to_path) using &str keys to avoid cloning
+                    let mut by_updated: HashMap<&str, Vec<&&grepdown_lib::Diagnostic>> = HashMap::new();
+                    for d in lint_diags {
+                        by_updated.entry(d.to_path.as_str()).or_default().push(d);
+                    }
+
+                    for (updated_file, deps) in &by_updated {
+                        // Extract version info from LintData::StaleRef
+                        let current_version = match &deps[0].data {
+                            LintData::StaleRef { current_version, .. } => *current_version,
+                        };
+                        println!("📄 {} (version {})", updated_file, current_version);
+                        println!("   └─ Referenced by:");
+                        for dep in deps {
+                            let pinned_version = match &dep.data {
+                                LintData::StaleRef { pinned_version, .. } => *pinned_version,
+                            };
+                            println!("      • {} (pinned at version {})", dep.from_path, pinned_version);
+                        }
+                        println!();
+                    }
+                }
             }
 
             println!("{}\n", lint.suggestions());
