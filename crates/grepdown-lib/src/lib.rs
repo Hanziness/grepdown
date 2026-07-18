@@ -8,5 +8,5 @@ mod search;
 pub use error::{Error, Result};
 pub use lint::{Diagnostic, Severity, LintData, LintId, Lint, StaleRef, Orphan, run_lints, approve_edits};
 pub use project::MDDBProject;
-pub use search::{SearchResult, Link, ReachableNode};
+pub use search::{SearchResult, Link, ReachableNode, escape_fts5_query};
 

@@ -2,6 +2,12 @@ use rusqlite::params;
 use crate::error::Result;
 use crate::project::MDDBProject;
 
+/// Escape a query string so FTS5 treats it as a literal phrase.
+/// Wraps the input in double quotes and escapes any inner `"` as `""`.
+pub fn escape_fts5_query(query: &str) -> String {
+    format!("\"{}\"", query.replace('"', "\"\""))
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchResult {
     pub path: String,

@@ -32,6 +32,10 @@ enum Commands {
         /// Skip refreshing the index before searching
         #[arg(long)]
         no_refresh: bool,
+
+        /// Treat the query as a literal string (no FTS5 operators)
+        #[arg(long)]
+        literal: bool,
     },
 
     /// Explicitly index the folder
@@ -75,10 +79,10 @@ fn main() {
             log::debug!("Initializing grepdown");
             cmd::init::init();
         },
-        Commands::Search { query, limit, no_refresh } => {
+        Commands::Search { query, limit, no_refresh, literal } => {
             log::debug!("Searching for: {}", query);
-            if let Err(e) = cmd::search::search(query, *limit, *no_refresh) {
-                eprintln!("Error: {}", e);
+            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal) {
+                eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
         },
@@ -90,14 +94,14 @@ fn main() {
         Commands::Lint { json } => {
             log::debug!("Running lints");
             if let Err(e) = cmd::lint::lint(*json) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
         },
         Commands::ApproveEdits { all, paths } => {
             log::debug!("Approving edits");
             if let Err(e) = cmd::lint::approve(*all, paths) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
         },
