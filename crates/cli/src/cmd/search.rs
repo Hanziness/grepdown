@@ -6,6 +6,7 @@ pub fn search(
     no_refresh: bool,
     literal: bool,
     json: bool,
+    path: Option<&str>,
 ) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
 
@@ -20,13 +21,21 @@ pub fn search(
         query.to_string()
     };
 
-    let results = match project.search(&effective_query, limit) {
+    let resolved_path = match path {
+        Some(p) => {
+            let full = std::path::Path::new(project.get_root()).join(p);
+            Some(full.to_string_lossy().into_owned())
+        }
+        None => None,
+    };
+
+    let results = match project.search(&effective_query, limit, resolved_path.as_deref()) {
         Ok(r) => r,
         Err(e) => {
             let err: anyhow::Error = e.into();
             if !literal && is_fts5_syntax_error(&err) {
                 let escaped = grepdown_lib::escape_fts5_query(query);
-                match project.search(&escaped, limit) {
+                match project.search(&escaped, limit, resolved_path.as_deref()) {
                     Ok(r) => {
                         eprintln!(
                             "Note: original query was not valid FTS5 syntax; treated as literal. \

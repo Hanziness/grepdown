@@ -35,27 +35,31 @@ impl MDDBProject {
     /// "word1 NEAR word2", "prefix*"). Searches body content and tags.
     /// 
     /// Results are ranked by BM25 relevance (lower score = better match).
-    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+    pub fn search(&self, query: &str, limit: usize, path_filter: Option<&str>) -> Result<Vec<SearchResult>> {
         let conn = self.get_conn();
+        let path_like = match path_filter {
+            Some(prefix) => format!("{}%", prefix),
+            None => "%".to_string(),
+        };
         let mut stmt = conn.prepare(
             "SELECT path, snippet, score FROM (
                 SELECT path,
                        snippet(documents_fts, 1, '<b>', '</b>', ' ... ', 32) as snippet,
                        bm25(documents_fts) as score
                 FROM documents_fts
-                WHERE documents_fts MATCH ?1
+                WHERE documents_fts MATCH ?1 AND path LIKE ?3
                 UNION ALL
                 SELECT path,
                        tags as snippet,
                        bm25(tags_fts) as score
                 FROM tags_fts
-                WHERE tags_fts MATCH ?1
+                WHERE tags_fts MATCH ?1 AND path LIKE ?3
             )
             ORDER BY score
             LIMIT ?2"
         )?;
         
-        stmt.query_map(params![query, limit as i64], |row| {
+        stmt.query_map(params![query, limit as i64, path_like], |row| {
             Ok(SearchResult {
                 path: row.get(0)?,
                 snippet: row.get(1)?,

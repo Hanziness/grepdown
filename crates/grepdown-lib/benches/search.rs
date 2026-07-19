@@ -84,7 +84,7 @@ fn bench_search_cold(c: &mut Criterion) {
                     project
                 },
                 |project| {
-                    project.search(query, SEARCH_LIMIT).unwrap();
+                    project.search(query, SEARCH_LIMIT, None).unwrap();
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -104,7 +104,7 @@ fn bench_search_warm(c: &mut Criterion) {
     for query in QUERIES {
         group.bench_function(format!("warm/{}", query), |b| {
             b.iter(|| {
-                project.search(query, SEARCH_LIMIT).unwrap();
+                project.search(query, SEARCH_LIMIT, None).unwrap();
             });
         });
     }
