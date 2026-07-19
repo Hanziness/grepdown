@@ -1,8 +1,13 @@
 use anyhow::{Context, Result};
 
-pub fn search(query: &str, limit: usize, no_refresh: bool, literal: bool) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::new(".")
-        .context("Failed to open project")?;
+pub fn search(
+    query: &str,
+    limit: usize,
+    no_refresh: bool,
+    literal: bool,
+    json: bool,
+) -> Result<()> {
+    let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
 
     if !no_refresh {
         log::info!("Refreshing index...");
@@ -44,15 +49,23 @@ pub fn search(query: &str, limit: usize, no_refresh: bool, literal: bool) -> Res
         return Ok(());
     }
 
-    for result in results {
-        // Strip HTML tags and apply ANSI bold
-        let snippet = result.snippet
-            .replace("<b>", "\x1b[1m")
-            .replace("</b>", "\x1b[0m");
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&results).context("Failed to pretty-print results")?
+        )
+    } else {
+        for result in results {
+            // Strip HTML tags and apply ANSI bold
+            let snippet = result
+                .snippet
+                .replace("<b>", "\x1b[1m")
+                .replace("</b>", "\x1b[0m");
 
-        println!("\x1b[1;32m{}\x1b[0m", result.path);
-        println!("  {}", snippet);
-        println!();
+            println!("\x1b[1;32m{}\x1b[0m", result.path);
+            println!("  {}", snippet);
+            println!();
+        }
     }
 
     Ok(())

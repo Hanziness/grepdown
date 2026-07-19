@@ -36,6 +36,10 @@ enum Commands {
         /// Treat the query as a literal string (no FTS5 operators)
         #[arg(long)]
         literal: bool,
+
+        /// Output query results as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Explicitly index the folder
@@ -79,9 +83,9 @@ fn main() {
             log::debug!("Initializing grepdown");
             cmd::init::init();
         },
-        Commands::Search { query, limit, no_refresh, literal } => {
+        Commands::Search { query, limit, no_refresh, literal, json } => {
             log::debug!("Searching for: {}", query);
-            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal) {
+            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }

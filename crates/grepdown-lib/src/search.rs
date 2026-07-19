@@ -1,4 +1,5 @@
 use rusqlite::params;
+use serde::Serialize;
 use crate::error::Result;
 use crate::project::MDDBProject;
 
@@ -8,7 +9,7 @@ pub fn escape_fts5_query(query: &str) -> String {
     format!("\"{}\"", query.replace('"', "\"\""))
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SearchResult {
     pub path: String,
     pub snippet: String,
