@@ -21,13 +21,7 @@ pub fn search(
         query.to_string()
     };
 
-    let resolved_path = match path {
-        Some(p) => {
-            let full = std::path::Path::new(project.get_root()).join(p);
-            Some(full.to_string_lossy().into_owned())
-        }
-        None => None,
-    };
+    let resolved_path = path.map(|p| p.to_string());
 
     let results = match project.search(&effective_query, limit, resolved_path.as_deref()) {
         Ok(r) => r,

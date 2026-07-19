@@ -36,25 +36,29 @@ fn extract_links(content: &str) -> Vec<(String, bool)> {
 
 /// Resolve a bundle-relative link target to a canonical document path.
 /// Tries: target.md, target/index.md
-fn resolve_link(base_path: &str, target: &str) -> Option<String> {
-    let base_dir = Path::new(base_path).parent()?;
+/// `base_path` is relative to `root`; `root` is the absolute project root.
+fn resolve_link(root: &str, base_path: &str, target: &str) -> Option<String> {
+    let abs_base = Path::new(root).join(base_path);
+    let base_dir = abs_base.parent()?;
     let resolved = base_dir.join(target);
-    
+
     // Normalize the path to resolve .. and . components
     let normalized = normalize_path(&resolved);
-    
+
     // Try direct: target.md
     let direct = normalized.with_extension("md");
     if direct.exists() {
-        return Some(direct.to_string_lossy().into_owned());
+        let rel = direct.strip_prefix(root).unwrap_or(&direct);
+        return Some(rel.to_string_lossy().into_owned());
     }
-    
+
     // Try directory index: target/index.md
     let index = normalized.join("index.md");
     if index.exists() {
-        return Some(index.to_string_lossy().into_owned());
+        let rel = index.strip_prefix(root).unwrap_or(&index);
+        return Some(rel.to_string_lossy().into_owned());
     }
-    
+
     None
 }
 
@@ -80,6 +84,7 @@ fn normalize_path(path: &Path) -> std::path::PathBuf {
 impl MDDBProject {
     /// Refresh the database and index files not seen before
     pub fn refresh(&self) -> Result<Vec<(String, i64)>> {
+        let root = self.get_root();
         let mut known = HashMap::<String, (i64, String)>::new();
         let conn = self.get_conn();
 
@@ -105,7 +110,9 @@ impl MDDBProject {
             .filter(|e| e.path().extension().map_or(false, |x| x == "md")) {
                 let meta = match entry.metadata() { Ok(m) => m, Err(_) => continue };
                 let mtime = meta.mtime();
-                let path = entry.path().to_string_lossy().into_owned();
+                let abs_path = entry.path();
+                let rel_path = abs_path.strip_prefix(root).unwrap_or(abs_path);
+                let path = rel_path.to_string_lossy().into_owned();
 
                 current_paths.insert(path.clone());
                 walked += 1;
@@ -123,7 +130,7 @@ impl MDDBProject {
         let read_results: Vec<(String, i64, String, String, String, Vec<(String, bool)>)> = changed
             .par_iter()
             .filter_map(|(path, mtime)| {
-                let content = fs::read_to_string(path).unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
+                let content = fs::read_to_string(Path::new(root).join(path)).unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
                 let hash = blake3::hash(&content.as_bytes()).to_string();
 
                 if let Some((_, old_hash)) = known.get(path) {
@@ -186,7 +193,7 @@ impl MDDBProject {
                 for (target, is_external) in links {
                     if *is_external {
                         resolved_citations.insert(target.clone());
-                    } else if let Some(resolved) = resolve_link(path, target) {
+                    } else if let Some(resolved) = resolve_link(root, path, target) {
                         resolved_links.insert(resolved, target.clone());
                     }
                 }
