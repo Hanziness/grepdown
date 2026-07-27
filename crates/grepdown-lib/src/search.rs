@@ -16,7 +16,7 @@ pub struct SearchResult {
     pub score: f64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Link {
     pub target: String,
     pub raw_target: Option<String>,
