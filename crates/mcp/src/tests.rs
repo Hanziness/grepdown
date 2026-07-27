@@ -47,8 +47,8 @@ fn test_all_tools_registered() {
     let router = GrepdownMCP::tool_router();
     let tools = router.list_all();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
-    assert_eq!(tools.len(), 7);
-    for name in &["search", "refresh", "lint", "approve_edits", "get_links", "get_citations", "get_reachable"] {
+    assert_eq!(tools.len(), 8);
+    for name in &["search", "refresh", "lint", "approve_edits", "get_links", "get_citations", "get_reachable", "get_document"] {
         assert!(names.contains(name), "missing tool: {}", name);
     }
 }
@@ -156,6 +156,40 @@ async fn test_get_reachable_finds_neighbors() {
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
     // doc1 links to doc2, doc2 links to doc1 — both reachable
     assert!(parsed.iter().any(|n| n["path"].as_str().unwrap() == "doc2.md"));
+}
+
+#[tokio::test]
+async fn test_get_document_returns_content_and_tags() {
+    // Create a project-scoped tempdir that stays alive for the test
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+
+    std::fs::write(
+        root.join("test-doc.md"),
+        r#"---
+tags: [rust, testing]
+---
+# Test Document
+This is about Rust programming.
+"#,
+    )
+    .unwrap();
+
+    let project = MDDBProject::new(root).unwrap();
+    project.refresh().unwrap();
+    let mcp = GrepdownMCP::new(project);
+
+    let result = mcp
+        .get_document(Parameters(DocIdParams {
+            doc_id: "test-doc.md".into(),
+        }))
+        .await
+        .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(parsed["path"].as_str().unwrap(), "test-doc.md");
+    assert!(parsed["content"].as_str().unwrap().contains("Rust programming"));
+    let tags = parsed["tags"].as_array().unwrap();
+    assert!(tags.iter().any(|t| t.as_str().unwrap() == "rust"));
 }
 
 #[tokio::test]

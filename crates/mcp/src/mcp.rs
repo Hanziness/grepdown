@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use rmcp::{ServerHandler, handler::server::wrapper::Parameters, tool, tool_handler, tool_router};
-use grepdown_lib::{MDDBProject, Link, ReachableNode, run_lints, approve_edits};
+use grepdown_lib::{MDDBProject, Link, ReachableNode, DocumentContent, run_lints, approve_edits};
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
@@ -155,12 +155,25 @@ impl GrepdownMCP {
         serde_json::to_string(&result)
             .map_err(|e| format!("serialization error: {e}"))
     }
+
+    #[tool(
+        description = "Read the full content of a document and its frontmatter tags. Use after `search` to retrieve the complete text of a matching document. The doc_id is the document path relative to the project root.",
+        annotations(title = "Read document content", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn get_document(&self, Parameters(DocIdParams { doc_id }): Parameters<DocIdParams>) -> Result<String, String> {
+        let project = self.project.lock().await;
+        let result: DocumentContent = project.read_document(&doc_id)
+            .map_err(|e| e.to_string())?;
+
+        serde_json::to_string(&result)
+            .map_err(|e| format!("serialization error: {e}"))
+    }
 }
 
 #[tool_handler(
     name = "grepdown",
     version = "0.1.0",
-    instructions = "Markdown knowledge base management. Typical workflow: 1) Call `refresh` to sync the index with the filesystem. 2) Use `search` for full-text queries. 3) Use `get_links` to explore document relationships (forward links and backlinks). 4) Use `get_citations` to find external URLs in a document. 5) Use `get_reachable` to explore knowledge neighborhoods via BFS traversal of the link graph. 6) Use `lint` to audit KB health and find stale/broken references. 7) Use `approve_edits` to mark stale references as reviewed after fixing them. All write operations (`refresh`, `approve_edits`) are safe and idempotent."
+    instructions = "Markdown knowledge base management. Typical workflow: 1) Call `refresh` to sync the index with the filesystem. 2) Use `search` for full-text queries. 3) Use `get_document` to read the full content and tags of a specific document. 4) Use `get_links` to explore document relationships (forward links and backlinks). 5) Use `get_citations` to find external URLs in a document. 6) Use `get_reachable` to explore knowledge neighborhoods via BFS traversal of the link graph. 7) Use `lint` to audit KB health and find stale/broken references. 8) Use `approve_edits` to mark stale references as reviewed after fixing them. All write operations (`refresh`, `approve_edits`) are safe and idempotent."
 )]
 impl ServerHandler for GrepdownMCP {}
 

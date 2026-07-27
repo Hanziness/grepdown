@@ -80,6 +80,12 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Read a document's content from the knowledge base
+    Read {
+        /// Document path relative to the project root
+        path: String,
+    },
 }
 
 fn main() {
@@ -130,6 +136,13 @@ fn main() {
         Commands::Reach { doc, depth, json } => {
             log::debug!("Computing reachability from: {}", doc);
             if let Err(e) = cmd::reach::reach(doc, *depth, *json) {
+                eprintln!("Error: {:#}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::Read { path } => {
+            log::debug!("Reading document: {}", path);
+            if let Err(e) = cmd::read::read(path) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }

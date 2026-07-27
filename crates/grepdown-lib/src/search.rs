@@ -1,7 +1,9 @@
 use rusqlite::params;
 use serde::Serialize;
+use std::path::Path;
 use crate::error::Result;
 use crate::project::MDDBProject;
+use crate::frontmatter::{parse_frontmatter, extract_tags};
 
 /// Escape a query string so FTS5 treats it as a literal phrase.
 /// Wraps the input in double quotes and escapes any inner `"` as `""`.
@@ -26,6 +28,13 @@ pub struct Link {
 pub struct ReachableNode {
     pub path: String,
     pub depth: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DocumentContent {
+    pub path: String,
+    pub content: String,
+    pub tags: Vec<String>,
 }
 
 impl MDDBProject {
@@ -142,5 +151,21 @@ impl MDDBProject {
             })
         })?.map(|r| r.map_err(Into::into))
           .collect::<Result<Vec<_>>>()
+    }
+
+    /// Read a document's content and extract its frontmatter tags.
+    /// The path should be relative to the project root.
+    pub fn read_document(&self, path: &str) -> Result<DocumentContent> {
+        let full_path = Path::new(self.get_root()).join(path);
+        let content = std::fs::read_to_string(&full_path)?;
+        let tags = parse_frontmatter(&content)
+            .map(|fm| extract_tags(&fm))
+            .unwrap_or_default();
+
+        Ok(DocumentContent {
+            path: path.to_string(),
+            content,
+            tags,
+        })
     }
 }
