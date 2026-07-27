@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use rmcp::{ServerHandler, handler::server::wrapper::Parameters, tool, tool_handler, tool_router};
-use grepdown_lib::{MDDBProject, Link, run_lints, approve_edits};
+use grepdown_lib::{MDDBProject, Link, ReachableNode, run_lints, approve_edits};
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
@@ -41,6 +41,16 @@ pub struct ApproveEditsParams {
     /// Only approve stale references in these paths. Empty or omitted means approve all.
     #[schemars(description = "Only approve stale references in these paths. Empty or omitted means approve all.")]
     pub paths: Option<Vec<String>>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ReachableParams {
+    /// Starting document identifier (typically the file path relative to the project root)
+    #[schemars(description = "Starting document identifier (typically the file path relative to the project root)")]
+    pub doc_id: String,
+    /// Maximum hop depth for BFS traversal (default: 2)
+    #[schemars(description = "Maximum hop depth for BFS traversal (default: 2)")]
+    pub max_depth: Option<i64>,
 }
 
 #[tool_router(vis = "pub")]
@@ -132,12 +142,25 @@ impl GrepdownMCP {
         serde_json::to_string(&result)
             .map_err(|e| format!("serialization error: {e}"))
     }
+
+    #[tool(
+        description = "Get all documents reachable from a starting document via the link graph using BFS traversal. Returns each reachable document with its minimum hop depth. Useful for exploring knowledge neighborhoods and understanding document clusters.",
+        annotations(title = "Get reachable documents", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn get_reachable(&self, Parameters(ReachableParams { doc_id, max_depth }): Parameters<ReachableParams>) -> Result<String, String> {
+        let project = self.project.lock().await;
+        let result: Vec<ReachableNode> = project.get_reachable(&doc_id, max_depth.unwrap_or(2))
+            .map_err(|e| e.to_string())?;
+
+        serde_json::to_string(&result)
+            .map_err(|e| format!("serialization error: {e}"))
+    }
 }
 
 #[tool_handler(
     name = "grepdown",
     version = "0.1.0",
-    instructions = "Markdown knowledge base management. Typical workflow: 1) Call `refresh` to sync the index with the filesystem. 2) Use `search` for full-text queries. 3) Use `get_links` to explore document relationships (forward links and backlinks). 4) Use `get_citations` to find external URLs in a document. 5) Use `lint` to audit KB health and find stale/broken references. 6) Use `approve_edits` to mark stale references as reviewed after fixing them. All write operations (`refresh`, `approve_edits`) are safe and idempotent."
+    instructions = "Markdown knowledge base management. Typical workflow: 1) Call `refresh` to sync the index with the filesystem. 2) Use `search` for full-text queries. 3) Use `get_links` to explore document relationships (forward links and backlinks). 4) Use `get_citations` to find external URLs in a document. 5) Use `get_reachable` to explore knowledge neighborhoods via BFS traversal of the link graph. 6) Use `lint` to audit KB health and find stale/broken references. 7) Use `approve_edits` to mark stale references as reviewed after fixing them. All write operations (`refresh`, `approve_edits`) are safe and idempotent."
 )]
 impl ServerHandler for GrepdownMCP {}
 

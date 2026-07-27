@@ -66,6 +66,20 @@ enum Commands {
         #[arg(required_unless_present = "all")]
         paths: Vec<String>,
     },
+
+    /// Show documents reachable from a given document via link graph
+    Reach {
+        /// Starting document (typically a relative path)
+        doc: String,
+
+        /// Maximum hop depth for traversal
+        #[arg(short, long, default_value = "2")]
+        depth: i64,
+
+        /// Output results as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -109,6 +123,13 @@ fn main() {
         Commands::ApproveEdits { all, paths } => {
             log::debug!("Approving edits");
             if let Err(e) = cmd::lint::approve(*all, paths) {
+                eprintln!("Error: {:#}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::Reach { doc, depth, json } => {
+            log::debug!("Computing reachability from: {}", doc);
+            if let Err(e) = cmd::reach::reach(doc, *depth, *json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }

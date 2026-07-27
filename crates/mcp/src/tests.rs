@@ -1,4 +1,4 @@
-use crate::mcp::{GrepdownMCP, SearchParams, DocIdParams, ApproveEditsParams};
+use crate::mcp::{GrepdownMCP, SearchParams, DocIdParams, ApproveEditsParams, ReachableParams};
 use grepdown_lib::MDDBProject;
 use rmcp::handler::server::wrapper::Parameters;
 use serde_json;
@@ -47,8 +47,8 @@ fn test_all_tools_registered() {
     let router = GrepdownMCP::tool_router();
     let tools = router.list_all();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
-    assert_eq!(tools.len(), 6);
-    for name in &["search", "refresh", "lint", "approve_edits", "get_links", "get_citations"] {
+    assert_eq!(tools.len(), 7);
+    for name in &["search", "refresh", "lint", "approve_edits", "get_links", "get_citations", "get_reachable"] {
         assert!(names.contains(name), "missing tool: {}", name);
     }
 }
@@ -141,6 +141,21 @@ async fn test_approve_edits_returns_count() {
     let count: u64 = serde_json::from_str(&result).unwrap();
     // ponytail: u64 is always >= 0, this assertion checks deserialization succeeded
     let _ = count;
+}
+
+#[tokio::test]
+async fn test_get_reachable_finds_neighbors() {
+    let mcp = test_mcp();
+    let result = mcp
+        .get_reachable(Parameters(ReachableParams {
+            doc_id: "doc1.md".into(),
+            max_depth: Some(2),
+        }))
+        .await
+        .unwrap();
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+    // doc1 links to doc2, doc2 links to doc1 — both reachable
+    assert!(parsed.iter().any(|n| n["path"].as_str().unwrap() == "doc2.md"));
 }
 
 #[tokio::test]

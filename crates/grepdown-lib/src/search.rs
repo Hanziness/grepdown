@@ -22,7 +22,7 @@ pub struct Link {
     pub raw_target: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ReachableNode {
     pub path: String,
     pub depth: i64,
