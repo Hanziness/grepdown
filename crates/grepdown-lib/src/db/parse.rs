@@ -18,6 +18,8 @@ const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
 const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target, pinned_version) VALUES (?1, ?2, ?3, (SELECT version FROM documents WHERE path = ?2))";
 const STMT_DEL_CITATIONS: &str = "DELETE FROM citations WHERE from_id = ?1";
 const STMT_INS_CITATION: &str = "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
+const STMT_DEL_BROKEN: &str = "DELETE FROM broken_links WHERE from_id = ?1";
+const STMT_INS_BROKEN: &str = "INSERT INTO broken_links (from_id, raw_target) VALUES (?1, ?2)";
 
 /// Extract all links from markdown content.
 /// Returns (target, is_external) where is_external=true means citation (URL).
@@ -127,7 +129,7 @@ impl MDDBProject {
         let deleted: Vec<String> = known.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
 
         // Parallel read changed files (level-2: skip if content unchanged)
-        let read_results: Vec<(String, i64, String, String, String, Vec<(String, bool)>)> = changed
+        let read_results: Vec<(String, i64, String, String, String, Vec<(String, bool)>, Vec<String>)> = changed
             .par_iter()
             .filter_map(|(path, mtime)| {
                 let content = fs::read_to_string(Path::new(root).join(path)).unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
@@ -148,12 +150,21 @@ impl MDDBProject {
                 links.sort();
                 links.dedup();
 
-                Some((path.clone(), *mtime, content, hash, tags_str, links))
+                let mut broken_links: Vec<String> = Vec::new();
+                for (target, is_external) in &links {
+                    if !is_external {
+                        if resolve_link(root, path, target).is_none() {
+                            broken_links.push(target.clone());
+                        }
+                    }
+                }
+
+                Some((path.clone(), *mtime, content, hash, tags_str, links, broken_links))
             })
             .collect();
 
         // Rebuild changed from read_results so it reflects only actually-processed files
-        changed = read_results.iter().map(|(p, m, _, _, _, _)| (p.clone(), *m)).collect();
+        changed = read_results.iter().map(|(p, m, _, _, _, _, _)| (p.clone(), *m)).collect();
 
         log::info!("Indexed {} files", read_results.len());
 
@@ -167,7 +178,7 @@ impl MDDBProject {
             let mut ins_tags = tx.prepare(STMT_INS_TAGS)?;
 
             // Phase 1: Upsert all documents first (so FK constraints pass for links)
-            for (path, mtime, content, hash, tags_str, _links) in &read_results {
+            for (path, mtime, content, hash, tags_str, _links, _broken) in &read_results {
                 del_fts.execute(params![path])?;
                 ins_fts.execute(params![path, content])?;
                 upsert_meta.execute(params![path, mtime, hash])?;
@@ -182,9 +193,12 @@ impl MDDBProject {
             let mut ins_link = tx.prepare(STMT_INS_LINK)?;
             let mut del_citations = tx.prepare(STMT_DEL_CITATIONS)?;
             let mut ins_citation = tx.prepare(STMT_INS_CITATION)?;
-            for (path, _mtime, _content, _hash, _tags_str, links) in &read_results {
+            let mut del_broken = tx.prepare(STMT_DEL_BROKEN)?;
+            let mut ins_broken = tx.prepare(STMT_INS_BROKEN)?;
+            for (path, _mtime, _content, _hash, _tags_str, links, broken) in &read_results {
                 del_links.execute(params![path])?;
                 del_citations.execute(params![path])?;
+                del_broken.execute(params![path])?;
                 
                 // Deduplicate resolved links and citations
                 let mut resolved_links = HashMap::new();
@@ -204,6 +218,14 @@ impl MDDBProject {
                 
                 for url in resolved_citations {
                     ins_citation.execute(params![path, url, url])?;
+                }
+                
+                // Insert broken links
+                let mut seen_broken = HashSet::new();
+                for raw_target in broken {
+                    if seen_broken.insert(raw_target.clone()) {
+                        ins_broken.execute(params![path, raw_target])?;
+                    }
                 }
             }
 

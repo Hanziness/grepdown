@@ -6,6 +6,7 @@ use crate::error::Result;
 pub enum LintId {
     StaleRef,
     Orphan,
+    BrokenLink,
 }
 
 impl LintId {
@@ -13,6 +14,7 @@ impl LintId {
         match self {
             LintId::StaleRef => "stale-ref",
             LintId::Orphan => "orphan",
+            LintId::BrokenLink => "broken-link",
         }
     }
 }
@@ -30,6 +32,9 @@ pub enum LintData {
         current_version: i64,
     },
     Orphan,
+    BrokenLink {
+        raw_target: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -176,8 +181,77 @@ impl Lint for Orphan {
     }
 }
 
+pub struct BrokenLink;
+
+impl Lint for BrokenLink {
+    fn id(&self) -> LintId {
+        LintId::BrokenLink
+    }
+
+    fn title(&self) -> &'static str {
+        "BROKEN LINKS DETECTED"
+    }
+
+    fn suggestions(&self) -> &'static str {
+        "💡 These links point to documents that don't exist. Consider:\n   \
+         1. Creating the missing documents\n   \
+         2. Fixing the link targets\n   \
+         3. Removing the broken links"
+    }
+
+    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
+        let mut stmt = conn.prepare(
+            "SELECT from_id, raw_target FROM broken_links"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(Diagnostic {
+                lint_id: self.id(),
+                severity: Severity::Error,
+                from_path: row.get(0)?,
+                to_path: row.get::<_, String>(1)?,
+                data: LintData::BrokenLink {
+                    raw_target: row.get(1)?,
+                },
+            })
+        })?;
+
+        let mut diags = Vec::new();
+        for row in rows {
+            diags.push(row?);
+        }
+        Ok(diags)
+    }
+
+    fn format_group(&self, diags: &[&Diagnostic]) -> String {
+        let mut out = String::new();
+
+        // Group by source document
+        let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+        for d in diags {
+            by_source.entry(d.from_path.as_str()).or_default().push(d);
+        }
+
+        for (source, deps) in &by_source {
+            out.push_str(&format!("📄 {}\n", source));
+            out.push_str("   └─ Broken links:\n");
+            for dep in deps {
+                match &dep.data {
+                    LintData::BrokenLink { raw_target } => {
+                        out.push_str(&format!("      • {} → {}\n", dep.from_path, raw_target));
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            out.push('\n');
+        }
+
+        out
+    }
+}
+
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
-    let lints: &[&dyn Lint] = &[&StaleRef, &Orphan];
+    let lints: &[&dyn Lint] = &[&StaleRef, &Orphan, &BrokenLink];
     let mut all = Vec::new();
     for lint in lints {
         all.extend(lint.check(conn)?);
@@ -242,6 +316,13 @@ mod tests {
         conn.execute(
             "INSERT INTO links (from_id, to_id, pinned_version) VALUES (?1, ?2, ?3)",
             rusqlite::params![from_path, to_path, pinned_version],
+        ).unwrap();
+    }
+
+    fn insert_broken_link(conn: &Connection, from_path: &str, raw_target: &str) {
+        conn.execute(
+            "INSERT INTO broken_links (from_id, raw_target) VALUES (?1, ?2)",
+            rusqlite::params![from_path, raw_target],
         ).unwrap();
     }
 
@@ -369,5 +450,25 @@ mod tests {
         let diags = run_lints(&conn).unwrap();
         let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
         assert_eq!(orphan_diags.len(), 0);
+    }
+
+    #[test]
+    fn broken_link_detection() {
+        let conn = setup_test_db();
+        insert_test_document(&conn, "doc-a.md", 1);
+        insert_broken_link(&conn, "doc-a.md", "nonexistent.md");
+
+        let lint = BrokenLink;
+        let diags = lint.check(&conn).unwrap();
+
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].from_path, "doc-a.md");
+        assert_eq!(diags[0].severity, Severity::Error);
+        match &diags[0].data {
+            LintData::BrokenLink { raw_target } => {
+                assert_eq!(raw_target, "nonexistent.md");
+            }
+            _ => panic!("expected BrokenLink data"),
+        }
     }
 }

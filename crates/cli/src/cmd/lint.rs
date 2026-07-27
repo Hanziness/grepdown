@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use grepdown_lib::{Lint, LintId, StaleRef, Orphan};
+use grepdown_lib::{Lint, LintId, StaleRef, Orphan, BrokenLink};
 
 pub fn lint(json: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".")?;
@@ -18,7 +18,7 @@ pub fn lint(json: bool) -> Result<()> {
     }
 
     // Build lint registry
-    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef), Box::new(Orphan)];
+    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef), Box::new(Orphan), Box::new(BrokenLink)];
     let lint_map: HashMap<LintId, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
 
     // Group by lint_id
