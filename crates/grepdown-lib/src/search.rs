@@ -52,7 +52,7 @@ impl MDDBProject {
         };
         let snippet_len = snippet_length.unwrap_or(32);
         let limit_i64 = limit as i64;
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT path, snippet,
                     MIN(score) * CASE WHEN COUNT(*) > 1 THEN 0.9 ELSE 1.0 END AS score
              FROM (
@@ -87,7 +87,7 @@ impl MDDBProject {
     /// Returns cross-references to other documents.
     pub fn get_links_from(&self, from_id: &str) -> Result<Vec<Link>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT to_id, raw_target FROM links WHERE from_id = ?1"
         )?;
         
@@ -103,7 +103,7 @@ impl MDDBProject {
     /// Get all citations (external URLs) from a document.
     pub fn get_citations_from(&self, from_id: &str) -> Result<Vec<String>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT url FROM citations WHERE from_id = ?1"
         )?;
         
@@ -115,7 +115,7 @@ impl MDDBProject {
     /// Get all links to a document (reverse traversal / backlinks).
     pub fn get_links_to(&self, to_id: &str) -> Result<Vec<Link>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT from_id, raw_target FROM links WHERE to_id = ?1"
         )?;
         
@@ -132,7 +132,7 @@ impl MDDBProject {
     /// Returns nodes with their minimum depth from the start.
     pub fn get_reachable(&self, from_id: &str, max_depth: i64) -> Result<Vec<ReachableNode>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "WITH RECURSIVE bfs AS (
                 SELECT to_id AS node, 1 AS depth 
                 FROM links 
