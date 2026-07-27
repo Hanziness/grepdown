@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-pub fn reach(doc: &str, depth: i64, json: bool) -> Result<()> {
+pub fn reach(doc: &str, depth: i64, json: bool, json_pretty: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
 
     let nodes = project
@@ -12,8 +12,13 @@ pub fn reach(doc: &str, depth: i64, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    if json {
-        println!("{}", serde_json::to_string(&nodes)?);
+    if json || json_pretty {
+        let output = if json_pretty {
+            serde_json::to_string_pretty(&nodes)?
+        } else {
+            serde_json::to_string(&nodes)?
+        };
+        println!("{}", output);
         return Ok(());
     }
 

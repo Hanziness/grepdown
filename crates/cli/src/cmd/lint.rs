@@ -2,13 +2,18 @@ use anyhow::Result;
 use std::collections::HashMap;
 use grepdown_lib::{Lint, LintId, StaleRef, Orphan, BrokenLink};
 
-pub fn lint(json: bool) -> Result<()> {
+pub fn lint(json: bool, json_pretty: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".")?;
     project.refresh()?;
     let diags = grepdown_lib::run_lints(project.get_conn())?;
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&diags)?);
+    if json || json_pretty {
+        let output = if json_pretty {
+            serde_json::to_string_pretty(&diags)?
+        } else {
+            serde_json::to_string(&diags)?
+        };
+        println!("{}", output);
         std::process::exit(if diags.is_empty() { 0 } else { 1 });
     }
 
