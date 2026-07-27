@@ -36,222 +36,167 @@ pub struct Diagnostic {
     pub data: LintData,
 }
 
-pub trait Lint {
-    fn id(&self) -> LintId;
-    fn title(&self) -> &'static str;
-    fn suggestions(&self) -> &'static str;
-    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>>;
-    fn format_group(&self, diags: &[&Diagnostic]) -> String;
+impl LintId {
+    pub fn title(self) -> &'static str {
+        match self {
+            LintId::StaleRef => "STALE REFERENCES DETECTED",
+            LintId::Orphan => "ORPHAN DOCUMENTS DETECTED",
+            LintId::BrokenLink => "BROKEN LINKS DETECTED",
+        }
+    }
+
+    pub fn suggestions(self) -> &'static str {
+        match self {
+            LintId::StaleRef => "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `grepdown approve-edits <filenames>` to mark them as reviewed",
+            LintId::Orphan => "💡 These documents have no links. Consider:\n   \
+                 1. Adding links to related documents\n   \
+                 2. Linking from other documents to these\n   \
+                 3. Deleting if they're no longer needed",
+            LintId::BrokenLink => "💡 These links point to documents that don't exist. Consider:\n   \
+                 1. Creating the missing documents\n   \
+                 2. Fixing the link targets\n   \
+                 3. Removing the broken links",
+        }
+    }
+
+    pub fn format_group(self, diags: &[&Diagnostic]) -> String {
+        match self {
+            LintId::StaleRef => format_stale_ref(diags),
+            LintId::Orphan => format_orphan(diags),
+            LintId::BrokenLink => format_broken_link(diags),
+        }
+    }
 }
 
-pub struct StaleRef;
+fn format_stale_ref(diags: &[&Diagnostic]) -> String {
+    let mut out = String::new();
+    out.push_str("The following files were updated, but their dependents may need review:\n\n");
 
-impl Lint for StaleRef {
-    fn id(&self) -> LintId {
-        LintId::StaleRef
+    let mut by_updated: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    for d in diags {
+        by_updated.entry(d.to_path.as_str()).or_default().push(d);
     }
 
-    fn title(&self) -> &'static str {
-        "STALE REFERENCES DETECTED"
-    }
-
-    fn suggestions(&self) -> &'static str {
-        "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `grepdown approve-edits <filenames>` to mark them as reviewed"
-    }
-
-    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
-        let mut stmt = conn.prepare(
-            "SELECT l.from_id, l.to_id, l.pinned_version, d.version
-             FROM links l
-             JOIN documents d ON l.to_id = d.path
-             WHERE l.pinned_version < d.version"
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            Ok(Diagnostic {
-                lint_id: self.id(),
-                severity: Severity::Warning,
-                from_path: row.get(0)?,
-                to_path: row.get(1)?,
-                data: LintData::StaleRef {
-                    pinned_version: row.get(2)?,
-                    current_version: row.get(3)?,
-                },
-            })
-        })?;
-
-        let mut diags = Vec::new();
-        for row in rows {
-            diags.push(row?);
-        }
-        Ok(diags)
-    }
-
-    fn format_group(&self, diags: &[&Diagnostic]) -> String {
-        let mut out = String::new();
-        out.push_str("The following files were updated, but their dependents may need review:\n\n");
-
-        // Group by updated file (to_path)
-        let mut by_updated: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
-        for d in diags {
-            by_updated.entry(d.to_path.as_str()).or_default().push(d);
-        }
-
-        for (updated_file, deps) in &by_updated {
-            let current_version = match &deps[0].data {
-                LintData::StaleRef { current_version, .. } => *current_version,
+    for (updated_file, deps) in &by_updated {
+        let current_version = match &deps[0].data {
+            LintData::StaleRef { current_version, .. } => *current_version,
+            _ => unreachable!(),
+        };
+        out.push_str(&format!("📄 {} (version {})\n", updated_file, current_version));
+        out.push_str("   └─ Referenced by:\n");
+        for dep in deps {
+            let pinned_version = match &dep.data {
+                LintData::StaleRef { pinned_version, .. } => *pinned_version,
                 _ => unreachable!(),
             };
-            out.push_str(&format!("📄 {} (version {})\n", updated_file, current_version));
-            out.push_str("   └─ Referenced by:\n");
-            for dep in deps {
-                let pinned_version = match &dep.data {
-                    LintData::StaleRef { pinned_version, .. } => *pinned_version,
-                    _ => unreachable!(),
-                };
-                out.push_str(&format!("      • {} (pinned at version {})\n", dep.from_path, pinned_version));
-            }
-            out.push('\n');
+            out.push_str(&format!("      • {} (pinned at version {})\n", dep.from_path, pinned_version));
         }
-
-        out
+        out.push('\n');
     }
+
+    out
 }
 
-pub struct Orphan;
-
-impl Lint for Orphan {
-    fn id(&self) -> LintId {
-        LintId::Orphan
+fn format_orphan(diags: &[&Diagnostic]) -> String {
+    let mut out = String::new();
+    for d in diags {
+        out.push_str(&format!("  - {}\n", d.from_path));
     }
-
-    fn title(&self) -> &'static str {
-        "ORPHAN DOCUMENTS DETECTED"
-    }
-
-    fn suggestions(&self) -> &'static str {
-        "💡 These documents have no links. Consider:\n   \
-         1. Adding links to related documents\n   \
-         2. Linking from other documents to these\n   \
-         3. Deleting if they're no longer needed"
-    }
-
-    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
-        let mut stmt = conn.prepare(
-            "SELECT d.path
-             FROM documents d
-             WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = d.path)
-               AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = d.path)"
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            let path: String = row.get(0)?;
-            Ok(Diagnostic {
-                lint_id: LintId::Orphan,
-                severity: Severity::Warning,
-                from_path: path.clone(),
-                to_path: path,
-                data: LintData::Orphan,
-            })
-        })?;
-
-        let mut diags = Vec::new();
-        for row in rows {
-            diags.push(row?);
-        }
-        Ok(diags)
-    }
-
-    fn format_group(&self, diags: &[&Diagnostic]) -> String {
-        let mut out = String::new();
-        for d in diags {
-            out.push_str(&format!("  - {}\n", d.from_path));
-        }
-        out
-    }
+    out
 }
 
-pub struct BrokenLink;
+fn format_broken_link(diags: &[&Diagnostic]) -> String {
+    let mut out = String::new();
 
-impl Lint for BrokenLink {
-    fn id(&self) -> LintId {
-        LintId::BrokenLink
+    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    for d in diags {
+        by_source.entry(d.from_path.as_str()).or_default().push(d);
     }
 
-    fn title(&self) -> &'static str {
-        "BROKEN LINKS DETECTED"
-    }
-
-    fn suggestions(&self) -> &'static str {
-        "💡 These links point to documents that don't exist. Consider:\n   \
-         1. Creating the missing documents\n   \
-         2. Fixing the link targets\n   \
-         3. Removing the broken links"
-    }
-
-    fn check(&self, conn: &Connection) -> Result<Vec<Diagnostic>> {
-        let mut stmt = conn.prepare(
-            "SELECT from_id, raw_target FROM broken_links"
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            Ok(Diagnostic {
-                lint_id: self.id(),
-                severity: Severity::Error,
-                from_path: row.get(0)?,
-                to_path: row.get::<_, String>(1)?,
-                data: LintData::BrokenLink {
-                    raw_target: row.get(1)?,
-                },
-            })
-        })?;
-
-        let mut diags = Vec::new();
-        for row in rows {
-            diags.push(row?);
-        }
-        Ok(diags)
-    }
-
-    fn format_group(&self, diags: &[&Diagnostic]) -> String {
-        let mut out = String::new();
-
-        // Group by source document
-        let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
-        for d in diags {
-            by_source.entry(d.from_path.as_str()).or_default().push(d);
-        }
-
-        for (source, deps) in &by_source {
-            out.push_str(&format!("📄 {}\n", source));
-            out.push_str("   └─ Broken links:\n");
-            for dep in deps {
-                match &dep.data {
-                    LintData::BrokenLink { raw_target } => {
-                        out.push_str(&format!("      • {} → {}\n", dep.from_path, raw_target));
-                    }
-                    _ => unreachable!(),
+    for (source, deps) in &by_source {
+        out.push_str(&format!("📄 {}\n", source));
+        out.push_str("   └─ Broken links:\n");
+        for dep in deps {
+            match &dep.data {
+                LintData::BrokenLink { raw_target } => {
+                    out.push_str(&format!("      • {} → {}\n", dep.from_path, raw_target));
                 }
+                _ => unreachable!(),
             }
-            out.push('\n');
         }
-
-        out
+        out.push('\n');
     }
+
+    out
+}
+
+fn check_stale_ref(conn: &Connection) -> Result<Vec<Diagnostic>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.from_id, l.to_id, l.pinned_version, d.version
+         FROM links l
+         JOIN documents d ON l.to_id = d.path
+         WHERE l.pinned_version < d.version"
+    )?;
+
+    stmt.query_map([], |row| {
+        Ok(Diagnostic {
+            lint_id: LintId::StaleRef,
+            severity: Severity::Warning,
+            from_path: row.get(0)?,
+            to_path: row.get(1)?,
+            data: LintData::StaleRef {
+                pinned_version: row.get(2)?,
+                current_version: row.get(3)?,
+            },
+        })
+    })?.map(|r| r.map_err(Into::into)).collect()
+}
+
+fn check_orphan(conn: &Connection) -> Result<Vec<Diagnostic>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.path
+         FROM documents d
+         WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = d.path)
+           AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = d.path)"
+    )?;
+
+    stmt.query_map([], |row| {
+        let path: String = row.get(0)?;
+        Ok(Diagnostic {
+            lint_id: LintId::Orphan,
+            severity: Severity::Warning,
+            from_path: path.clone(),
+            to_path: path,
+            data: LintData::Orphan,
+        })
+    })?.map(|r| r.map_err(Into::into)).collect()
+}
+
+fn check_broken_link(conn: &Connection) -> Result<Vec<Diagnostic>> {
+    let mut stmt = conn.prepare("SELECT from_id, raw_target FROM broken_links")?;
+
+    stmt.query_map([], |row| {
+        let raw_target: String = row.get(1)?;
+        Ok(Diagnostic {
+            lint_id: LintId::BrokenLink,
+            severity: Severity::Error,
+            from_path: row.get(0)?,
+            to_path: raw_target.clone(),
+            data: LintData::BrokenLink { raw_target },
+        })
+    })?.map(|r| r.map_err(Into::into)).collect()
 }
 
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
-    let lints: &[&dyn Lint] = &[&StaleRef, &Orphan, &BrokenLink];
     let mut all = Vec::new();
-    for lint in lints {
-        all.extend(lint.check(conn)?);
-    }
+    all.extend(check_stale_ref(conn)?);
+    all.extend(check_orphan(conn)?);
+    all.extend(check_broken_link(conn)?);
     Ok(all)
 }
 
 pub fn approve_edits(conn: &Connection, paths: &[String]) -> Result<usize> {
     let rows = if paths.is_empty() {
-        // Approve all stale references using CTE to avoid redundant subqueries
         conn.execute(
             "WITH stale AS (
                 SELECT l.rowid as link_rowid, d.version as current_version
@@ -264,7 +209,6 @@ pub fn approve_edits(conn: &Connection, paths: &[String]) -> Result<usize> {
             []
         )?
     } else {
-        // Approve only links TO the specified paths
         let placeholders: Vec<String> = paths.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
         let sql = format!(
             "WITH stale AS (
@@ -316,6 +260,10 @@ mod tests {
         ).unwrap();
     }
 
+    fn diags_for(diags: &[Diagnostic], id: LintId) -> Vec<&Diagnostic> {
+        diags.iter().filter(|d| d.lint_id == id).collect()
+    }
+
     #[test]
     fn test_stale_ref_detection() {
         let conn = setup_test_db();
@@ -323,9 +271,7 @@ mod tests {
         insert_test_document(&conn, "/b.md", 2);
         insert_test_link(&conn, "/a.md", "/b.md", 1);
 
-        let lint = StaleRef;
-        let diags = lint.check(&conn).unwrap();
-
+        let diags = check_stale_ref(&conn).unwrap();
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].from_path, "/a.md");
         assert_eq!(diags[0].to_path, "/b.md");
@@ -345,9 +291,7 @@ mod tests {
         insert_test_document(&conn, "/b.md", 2);
         insert_test_link(&conn, "/a.md", "/b.md", 2);
 
-        let lint = StaleRef;
-        let diags = lint.check(&conn).unwrap();
-
+        let diags = check_stale_ref(&conn).unwrap();
         assert_eq!(diags.len(), 0);
     }
 
@@ -361,7 +305,6 @@ mod tests {
         let rows = approve_edits(&conn, &[]).unwrap();
         assert_eq!(rows, 1);
 
-        // Verify the link was updated
         let pinned: i64 = conn.query_row(
             "SELECT pinned_version FROM links WHERE from_id = '/a.md'",
             [],
@@ -383,7 +326,6 @@ mod tests {
         let rows = approve_edits(&conn, &paths).unwrap();
         assert_eq!(rows, 1);
 
-        // Verify only the link to /b.md was updated
         let pinned_b: i64 = conn.query_row(
             "SELECT pinned_version FROM links WHERE to_id = '/b.md'",
             [],
@@ -406,13 +348,12 @@ mod tests {
         insert_test_document(&conn, "another-orphan.md", 1);
 
         let diags = run_lints(&conn).unwrap();
-        // Filter only orphan diagnostics
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
-        assert_eq!(orphan_diags.len(), 2);
-        let mut paths: Vec<&str> = orphan_diags.iter().map(|d| d.from_path.as_str()).collect();
+        let orphans = diags_for(&diags, LintId::Orphan);
+        assert_eq!(orphans.len(), 2);
+        let mut paths: Vec<&str> = orphans.iter().map(|d| d.from_path.as_str()).collect();
         paths.sort();
         assert_eq!(paths, vec!["another-orphan.md", "orphan.md"]);
-        match &orphan_diags[0].data {
+        match &orphans[0].data {
             LintData::Orphan => {}
             _ => panic!("expected Orphan data"),
         }
@@ -426,8 +367,7 @@ mod tests {
         insert_test_link(&conn, "doc-a.md", "doc-b.md", 1);
 
         let diags = run_lints(&conn).unwrap();
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
-        assert_eq!(orphan_diags.len(), 0);
+        assert!(diags_for(&diags, LintId::Orphan).is_empty());
     }
 
     #[test]
@@ -438,8 +378,7 @@ mod tests {
         insert_test_link(&conn, "source.md", "target.md", 1);
 
         let diags = run_lints(&conn).unwrap();
-        let orphan_diags: Vec<_> = diags.iter().filter(|d| d.lint_id == LintId::Orphan).collect();
-        assert_eq!(orphan_diags.len(), 0);
+        assert!(diags_for(&diags, LintId::Orphan).is_empty());
     }
 
     #[test]
@@ -448,9 +387,7 @@ mod tests {
         insert_test_document(&conn, "doc-a.md", 1);
         insert_broken_link(&conn, "doc-a.md", "nonexistent.md");
 
-        let lint = BrokenLink;
-        let diags = lint.check(&conn).unwrap();
-
+        let diags = check_broken_link(&conn).unwrap();
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].from_path, "doc-a.md");
         assert_eq!(diags[0].severity, Severity::Error);

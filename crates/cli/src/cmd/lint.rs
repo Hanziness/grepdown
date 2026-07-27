@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use grepdown_lib::{Lint, LintId, StaleRef, Orphan, BrokenLink};
+use grepdown_lib::LintId;
 
 pub fn lint(json: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".")?;
@@ -17,10 +17,6 @@ pub fn lint(json: bool) -> Result<()> {
         std::process::exit(0);
     }
 
-    // Build lint registry
-    let lints: Vec<Box<dyn Lint>> = vec![Box::new(StaleRef), Box::new(Orphan), Box::new(BrokenLink)];
-    let lint_map: HashMap<LintId, &dyn Lint> = lints.iter().map(|l| (l.id(), l.as_ref())).collect();
-
     // Group by lint_id
     let mut by_lint: HashMap<LintId, Vec<&grepdown_lib::Diagnostic>> = HashMap::new();
     for d in &diags {
@@ -29,11 +25,9 @@ pub fn lint(json: bool) -> Result<()> {
 
     // Print each lint's output
     for (lint_id, lint_diags) in &by_lint {
-        if let Some(lint) = lint_map.get(lint_id) {
-            println!("⚠️  {}\n", lint.title());
-            println!("{}", lint.format_group(lint_diags));
-            println!("{}\n", lint.suggestions());
-        }
+        println!("⚠️  {}\n", lint_id.title());
+        println!("{}", lint_id.format_group(lint_diags));
+        println!("{}\n", lint_id.suggestions());
     }
 
     println!("{} issue(s) found.", diags.len());
@@ -43,13 +37,13 @@ pub fn lint(json: bool) -> Result<()> {
 pub fn approve(all: bool, paths: &[String]) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".")?;
     project.refresh()?;
-    
+
     let n = if all {
         grepdown_lib::approve_edits(project.get_conn(), &[])?
     } else {
         grepdown_lib::approve_edits(project.get_conn(), paths)?
     };
-    
+
     println!("Approved {} link(s).", n);
     Ok(())
 }
