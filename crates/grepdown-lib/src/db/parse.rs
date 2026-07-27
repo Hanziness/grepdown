@@ -94,6 +94,14 @@ fn normalize_path(path: &Path) -> std::path::PathBuf {
     normalized
 }
 
+/// Result of processing a file whose mtime changed.
+/// `Changed` = content differs → full re-index.
+/// `Unchanged` = content matches → only mtime needs write-back.
+enum ParseResult {
+    Changed(IndexedDoc),
+    Unchanged { path: String, mtime: i64, hash: String },
+}
+
 impl MDDBProject {
     /// Refresh the database and index files not seen before
     pub fn refresh(&self) -> Result<Vec<(String, i64)>> {
@@ -139,17 +147,18 @@ impl MDDBProject {
         // Detect deleted files (known from DB but no longer on disk)
         let deleted: Vec<String> = known.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
 
-        // Parallel read changed files (level-2: skip if content unchanged)
-        let read_results: Vec<IndexedDoc> = changed
+        // Parallel read changed files (level-2: skip link resolution if content unchanged)
+        let results: Vec<ParseResult> = changed
             .par_iter()
-            .filter_map(|(path, mtime)| {
+            .map(|(path, mtime)| {
                 let content = fs::read_to_string(Path::new(root).join(path))
                     .unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
                 let hash = blake3::hash(content.as_bytes()).to_string();
 
                 if let Some((_, old_hash)) = known.get(path) {
                     if *old_hash == hash {
-                        return None; // content unchanged, skip FTS re-index
+                        // Content unchanged — record mtime-only touch, skip parsing
+                        return ParseResult::Unchanged { path: path.clone(), mtime: *mtime, hash };
                     }
                 }
 
@@ -178,7 +187,7 @@ impl MDDBProject {
                     }
                 }
 
-                Some(IndexedDoc {
+                ParseResult::Changed(IndexedDoc {
                     path: path.clone(),
                     mtime: *mtime,
                     content,
@@ -191,10 +200,19 @@ impl MDDBProject {
             })
             .collect();
 
-        // Rebuild changed from read_results so it reflects only actually-processed files
-        changed = read_results.iter().map(|doc| (doc.path.clone(), doc.mtime)).collect();
+        // Split into changed-docs (full re-index) and touch-only (mtime write-back)
+        let mut changed_docs: Vec<IndexedDoc> = Vec::new();
+        let mut touch: Vec<(String, i64, String)> = Vec::new();
+        for r in results {
+            match r {
+                ParseResult::Changed(doc) => changed_docs.push(doc),
+                ParseResult::Unchanged { path, mtime, hash } => touch.push((path, mtime, hash)),
+            }
+        }
 
-        log::info!("Indexed {} files", read_results.len());
+        // Rebuild changed return value from actually-reindexed docs
+        changed = changed_docs.iter().map(|doc| (doc.path.clone(), doc.mtime)).collect();
+        log::info!("Indexed {} files, {} mtime-only touches", changed_docs.len(), touch.len());
 
         // Do a single transaction for the whole batch
         let tx = conn.unchecked_transaction()?;
@@ -206,7 +224,7 @@ impl MDDBProject {
             let mut ins_tags = tx.prepare(STMT_INS_TAGS)?;
 
             // Phase 1: Upsert all documents first (so FK constraints pass for links)
-            for doc in &read_results {
+            for doc in &changed_docs {
                 del_fts.execute(params![doc.path])?;
                 ins_fts.execute(params![doc.path, doc.content])?;
                 upsert_meta.execute(params![doc.path, doc.mtime, doc.hash])?;
@@ -223,7 +241,7 @@ impl MDDBProject {
             let mut ins_citation = tx.prepare(STMT_INS_CITATION)?;
             let mut del_broken = tx.prepare(STMT_DEL_BROKEN)?;
             let mut ins_broken = tx.prepare(STMT_INS_BROKEN)?;
-            for doc in &read_results {
+            for doc in &changed_docs {
                 del_links.execute(params![doc.path])?;
                 del_citations.execute(params![doc.path])?;
                 del_broken.execute(params![doc.path])?;
@@ -249,7 +267,21 @@ impl MDDBProject {
 
         }
         tx.commit()?;
-        log::debug!("Committed transaction with {} rows, {} deleted", read_results.len(), deleted.len());
+        log::debug!("Committed transaction with {} rows, {} deleted", changed_docs.len(), deleted.len());
+
+        // Write back new mtimes for files whose content hash was unchanged,
+        // so subsequent refreshes don't re-read and re-hash them.
+        if !touch.is_empty() {
+            let tx = conn.unchecked_transaction()?;
+            {
+                let mut upd_meta = tx.prepare(STMT_UPD_META)?;
+                for (path, mtime, hash) in &touch {
+                    upd_meta.execute(params![path, mtime, hash])?;
+                }
+            }
+            tx.commit()?;
+            log::debug!("Wrote back mtime for {} hash-unchanged files", touch.len());
+        }
 
         Ok(changed)
     }
