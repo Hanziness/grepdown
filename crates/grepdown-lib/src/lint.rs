@@ -9,16 +9,6 @@ pub enum LintId {
     BrokenLink,
 }
 
-impl LintId {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            LintId::StaleRef => "stale-ref",
-            LintId::Orphan => "orphan",
-            LintId::BrokenLink => "broken-link",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Severity {
     Error,
