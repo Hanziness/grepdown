@@ -613,7 +613,6 @@ dependencies = [
  "env_logger",
  "grepdown-lib",
  "log",
- "serde",
  "serde_json",
 ]
 

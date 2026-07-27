@@ -41,10 +41,6 @@ enum Commands {
         #[arg(long)]
         json: bool,
 
-        /// Output query results as pretty-printed JSON
-        #[arg(long)]
-        json_pretty: bool,
-
         /// Filter results to files under this subfolder path
         #[arg(long)]
         path: Option<String>,
@@ -62,10 +58,6 @@ enum Commands {
         /// Output results as compact JSON
         #[arg(long)]
         json: bool,
-
-        /// Output results as pretty-printed JSON
-        #[arg(long)]
-        json_pretty: bool,
     },
 
     /// Approve stale references for specific files or all files
@@ -91,10 +83,6 @@ enum Commands {
         /// Output results as compact JSON
         #[arg(long)]
         json: bool,
-
-        /// Output results as pretty-printed JSON
-        #[arg(long)]
-        json_pretty: bool,
     },
 
     /// Read a document's content from the knowledge base
@@ -123,9 +111,9 @@ fn main() {
             log::debug!("Initializing grepdown");
             cmd::init::init();
         },
-        Commands::Search { query, limit, no_refresh, literal, json, json_pretty, path, snippet_length } => {
+        Commands::Search { query, limit, no_refresh, literal, json, path, snippet_length } => {
             log::debug!("Searching for: {}", query);
-            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json, *json_pretty, path.as_deref(), Some(*snippet_length)) {
+            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json, path.as_deref(), Some(*snippet_length)) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
@@ -135,9 +123,9 @@ fn main() {
             let project = grepdown_lib::MDDBProject::new(".").unwrap();
             project.refresh().unwrap();
         },
-        Commands::Lint { json, json_pretty } => {
+        Commands::Lint { json } => {
             log::debug!("Running lints");
-            if let Err(e) = cmd::lint::lint(*json, *json_pretty) {
+            if let Err(e) = cmd::lint::lint(*json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
@@ -149,9 +137,9 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Commands::Reach { doc, depth, json, json_pretty } => {
+        Commands::Reach { doc, depth, json } => {
             log::debug!("Computing reachability from: {}", doc);
-            if let Err(e) = cmd::reach::reach(doc, *depth, *json, *json_pretty) {
+            if let Err(e) = cmd::reach::reach(doc, *depth, *json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }

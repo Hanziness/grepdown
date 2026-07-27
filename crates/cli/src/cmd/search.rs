@@ -6,7 +6,6 @@ pub fn search(
     no_refresh: bool,
     literal: bool,
     json: bool,
-    json_pretty: bool,
     path: Option<&str>,
     snippet_length: Option<i64>,
 ) -> Result<()> {
@@ -54,8 +53,8 @@ pub fn search(
         return Ok(());
     }
 
-    if json || json_pretty {
-        crate::cmd::print_json_output(&results, json_pretty)?;
+    if json {
+        println!("{}", serde_json::to_string(&results)?);
         return Ok(());
     }
 

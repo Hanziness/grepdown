@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-pub fn reach(doc: &str, depth: i64, json: bool, json_pretty: bool) -> Result<()> {
+pub fn reach(doc: &str, depth: i64, json: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
 
     let nodes = project
@@ -12,8 +12,8 @@ pub fn reach(doc: &str, depth: i64, json: bool, json_pretty: bool) -> Result<()>
         return Ok(());
     }
 
-    if json || json_pretty {
-        crate::cmd::print_json_output(&nodes, json_pretty)?;
+    if json {
+        println!("{}", serde_json::to_string(&nodes)?);
         return Ok(());
     }
 
