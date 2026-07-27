@@ -51,51 +51,36 @@ impl MDDBProject {
             None => "%".to_string(),
         };
         let snippet_len = snippet_length.unwrap_or(32);
-        // Fetch 2x results to allow for deduplication
-        let fetch_limit = (limit * 2) as i64;
+        let limit_i64 = limit as i64;
         let mut stmt = conn.prepare(
-            "SELECT path, snippet, score FROM (
-                SELECT path,
-                       snippet(documents_fts, 1, '<b>', '</b>', ' ... ', ?4) as snippet,
-                       bm25(documents_fts) as score
-                FROM documents_fts
-                WHERE documents_fts MATCH ?1 AND path LIKE ?3
-                UNION ALL
-                SELECT path,
-                       tags as snippet,
-                       bm25(tags_fts) as score
-                FROM tags_fts
-                WHERE tags_fts MATCH ?1 AND path LIKE ?3
-            )
-            ORDER BY score
-            LIMIT ?2"
+            "SELECT path, snippet,
+                    MIN(score) * CASE WHEN COUNT(*) > 1 THEN 0.9 ELSE 1.0 END AS score
+             FROM (
+                 SELECT path,
+                        snippet(documents_fts, 1, '<b>', '</b>', ' ... ', ?4) as snippet,
+                        bm25(documents_fts) as score
+                 FROM documents_fts
+                 WHERE documents_fts MATCH ?1 AND path LIKE ?3
+                 UNION ALL
+                 SELECT path,
+                        tags as snippet,
+                        bm25(tags_fts) as score
+                 FROM tags_fts
+                 WHERE tags_fts MATCH ?1 AND path LIKE ?3
+             )
+             GROUP BY path
+             ORDER BY score
+             LIMIT ?2"
         )?;
-        
-        let mut raw: Vec<SearchResult> = stmt.query_map(params![query, fetch_limit, path_like, snippet_len], |row| {
+
+        stmt.query_map(params![query, limit_i64, path_like, snippet_len], |row| {
             Ok(SearchResult {
                 path: row.get(0)?,
                 snippet: row.get(1)?,
                 score: row.get(2)?,
             })
         })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()?;
-
-        // Deduplicate: keep first occurrence (best score), boost if matched in both
-        let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-        let mut deduped: Vec<SearchResult> = Vec::new();
-        for result in raw.drain(..) {
-            if let Some(&idx) = seen.get(&result.path) {
-                // Already seen — boost the existing result's score
-                deduped[idx].score *= 0.9;
-            } else {
-                seen.insert(result.path.clone(), deduped.len());
-                deduped.push(result);
-            }
-        }
-
-        // Truncate to requested limit
-        deduped.truncate(limit);
-        Ok(deduped)
+          .collect::<Result<Vec<_>>>()
     }
 
     /// Get all links from a document (forward traversal).
