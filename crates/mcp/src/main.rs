@@ -3,6 +3,7 @@ use rmcp::ServiceExt;
 use tokio::io::{stdin, stdout};
 
 mod mcp;
+#[cfg(test)] mod tests;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {

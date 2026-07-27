@@ -20,36 +20,36 @@ impl GrepdownMCP {
 pub struct SearchParams {
     /// Full-text search query to match against document content
     #[schemars(description = "Full-text search query to match against document content")]
-    query: String,
+    pub query: String,
     /// Maximum number of results to return (default: 20)
     #[schemars(description = "Maximum number of results to return (default: 20)")]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
     /// Restrict results to documents whose path contains this substring
     #[schemars(description = "Restrict results to documents whose path contains this substring")]
-    path_filter: Option<String>,
+    pub path_filter: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct DocIdParams {
     /// Unique document identifier (typically the file path relative to the project root)
     #[schemars(description = "Unique document identifier (typically the file path relative to the project root)")]
-    doc_id: String,
+    pub doc_id: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ApproveEditsParams {
     /// Only approve stale references in these paths. Empty or omitted means approve all.
     #[schemars(description = "Only approve stale references in these paths. Empty or omitted means approve all.")]
-    paths: Option<Vec<String>>,
+    pub paths: Option<Vec<String>>,
 }
 
-#[tool_router]
+#[tool_router(vis = "pub")]
 impl GrepdownMCP {
     #[tool(
         description = "Search the knowledge base using full-text search. Returns matching documents ranked by relevance. Call `refresh` first if files may have been added or modified since the last index.",
         annotations(title = "Search documents", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn search(&self, Parameters(SearchParams { query, limit, path_filter }): Parameters<SearchParams>) -> Result<String, String> {
+    pub async fn search(&self, Parameters(SearchParams { query, limit, path_filter }): Parameters<SearchParams>) -> Result<String, String> {
         let project = self.project.lock().await;
         let results = project.search(&query, limit.unwrap_or(20), path_filter.as_deref())
             .map_err(|e| e.to_string())?;
@@ -62,7 +62,7 @@ impl GrepdownMCP {
         description = "Re-index the project. Scans for new, modified, or deleted files and updates the search index. Returns changed file paths and their new mtimes. Call this before `search` when files may have changed.",
         annotations(title = "Refresh index", read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn refresh(&self) -> Result<String, String> {
+    pub async fn refresh(&self) -> Result<String, String> {
         let project = self.project.lock().await;
         let result = project.refresh()
             .map_err(|e| e.to_string())?;
@@ -75,7 +75,7 @@ impl GrepdownMCP {
         description = "Run knowledge base lints and return diagnostics. Detects issues such as broken links, stale references, and orphaned documents. Use this to audit KB health.",
         annotations(title = "Lint knowledge base", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn lint(&self) -> Result<String, String> {
+    pub async fn lint(&self) -> Result<String, String> {
         let project = self.project.lock().await;
         let conn = project.get_conn();
         let result = run_lints(conn)
@@ -89,7 +89,7 @@ impl GrepdownMCP {
         description = "Approve stale references in the knowledge base. Marks outdated link targets as accepted. When `paths` is omitted or empty, approves all stale references. When `paths` is provided, only approves stale references in those specific documents. Use after reviewing lint diagnostics.",
         annotations(title = "Approve stale references", read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn approve_edits(&self, Parameters(ApproveEditsParams { paths }): Parameters<ApproveEditsParams>) -> Result<String, String> {
+    pub async fn approve_edits(&self, Parameters(ApproveEditsParams { paths }): Parameters<ApproveEditsParams>) -> Result<String, String> {
         let project = self.project.lock().await;
         let conn = project.get_conn();
         let count = approve_edits(conn, &paths.unwrap_or_default())
@@ -103,7 +103,7 @@ impl GrepdownMCP {
         description = "Get outgoing links (documents this one links to) and incoming links (backlinks: documents linking to this one) for a given document. Useful for understanding document relationships and navigation.",
         annotations(title = "Get document links", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn get_links(&self, Parameters(DocIdParams { doc_id }): Parameters<DocIdParams>) -> Result<String, String> {
+    pub async fn get_links(&self, Parameters(DocIdParams { doc_id }): Parameters<DocIdParams>) -> Result<String, String> {
         let project = self.project.lock().await;
         let outgoing = project.get_links_from(&doc_id)
             .map_err(|e| e.to_string())?;
@@ -124,7 +124,7 @@ impl GrepdownMCP {
         description = "Get external URLs (HTTP/HTTPS citations) referenced in a document. Useful for finding source material or verifying references.",
         annotations(title = "Get document citations", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    async fn get_citations(&self, Parameters(DocIdParams { doc_id }): Parameters<DocIdParams>) -> Result<String, String> {
+    pub async fn get_citations(&self, Parameters(DocIdParams { doc_id }): Parameters<DocIdParams>) -> Result<String, String> {
         let project = self.project.lock().await;
         let result = project.get_citations_from(&doc_id)
             .map_err(|e| e.to_string())?;
@@ -140,3 +140,5 @@ impl GrepdownMCP {
     instructions = "Markdown knowledge base management. Typical workflow: 1) Call `refresh` to sync the index with the filesystem. 2) Use `search` for full-text queries. 3) Use `get_links` to explore document relationships (forward links and backlinks). 4) Use `get_citations` to find external URLs in a document. 5) Use `lint` to audit KB health and find stale/broken references. 6) Use `approve_edits` to mark stale references as reviewed after fixing them. All write operations (`refresh`, `approve_edits`) are safe and idempotent."
 )]
 impl ServerHandler for GrepdownMCP {}
+
+
