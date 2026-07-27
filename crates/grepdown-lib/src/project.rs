@@ -29,7 +29,8 @@ impl MDDBProject {
         if !db_path.exists() {
             return Err(Error::ProjectNotFound);
         }
-        Self::new(root)
+        let conn = db::start(&root_path)?;
+        Ok(Self { root: root_path, conn })
     }
 
     /// Get a reference to the project's database connection
