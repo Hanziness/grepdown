@@ -220,12 +220,9 @@ impl MDDBProject {
                     ins_citation.execute(params![path, url, url])?;
                 }
                 
-                // Insert broken links
-                let mut seen_broken = HashSet::new();
+                // Insert broken links (already deduped upstream via sort+dedup on links)
                 for raw_target in broken {
-                    if seen_broken.insert(raw_target.clone()) {
-                        ins_broken.execute(params![path, raw_target])?;
-                    }
+                    ins_broken.execute(params![path, raw_target])?;
                 }
             }
 
