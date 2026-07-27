@@ -1,4 +1,4 @@
-use rusqlite::params;
+use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::path::Path;
 use crate::error::Result;
@@ -35,6 +35,16 @@ pub struct DocumentContent {
     pub path: String,
     pub content: String,
     pub tags: Vec<String>,
+}
+
+fn query_links(conn: &Connection, sql: &str, id: &str) -> Result<Vec<Link>> {
+    let mut stmt = conn.prepare_cached(sql)?;
+    stmt.query_map(params![id], |row| {
+        Ok(Link {
+            target: row.get(0)?,
+            raw_target: row.get(1)?,
+        })
+    })?.map(|r| r.map_err(Into::into)).collect()
 }
 
 impl MDDBProject {
@@ -86,46 +96,21 @@ impl MDDBProject {
     /// Get all links from a document (forward traversal).
     /// Returns cross-references to other documents.
     pub fn get_links_from(&self, from_id: &str) -> Result<Vec<Link>> {
-        let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached(
-            "SELECT to_id, raw_target FROM links WHERE from_id = ?1"
-        )?;
-        
-        stmt.query_map(params![from_id], |row| {
-            Ok(Link {
-                target: row.get(0)?,
-                raw_target: row.get(1)?,
-            })
-        })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()
+        query_links(self.get_conn(), "SELECT to_id, raw_target FROM links WHERE from_id = ?1", from_id)
     }
 
     /// Get all citations (external URLs) from a document.
     pub fn get_citations_from(&self, from_id: &str) -> Result<Vec<String>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached(
-            "SELECT url FROM citations WHERE from_id = ?1"
-        )?;
-        
+        let mut stmt = conn.prepare_cached("SELECT url FROM citations WHERE from_id = ?1")?;
         stmt.query_map(params![from_id], |row| row.get(0))?
             .map(|r| r.map_err(Into::into))
-            .collect::<Result<Vec<_>>>()
+            .collect()
     }
 
     /// Get all links to a document (reverse traversal / backlinks).
     pub fn get_links_to(&self, to_id: &str) -> Result<Vec<Link>> {
-        let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached(
-            "SELECT from_id, raw_target FROM links WHERE to_id = ?1"
-        )?;
-        
-        stmt.query_map(params![to_id], |row| {
-            Ok(Link {
-                target: row.get(0)?,
-                raw_target: row.get(1)?,
-            })
-        })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()
+        query_links(self.get_conn(), "SELECT from_id, raw_target FROM links WHERE to_id = ?1", to_id)
     }
 
     /// BFS traversal: get all nodes reachable from a starting node up to max_depth hops.
