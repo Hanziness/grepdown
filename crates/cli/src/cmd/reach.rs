@@ -13,12 +13,7 @@ pub fn reach(doc: &str, depth: i64, json: bool, json_pretty: bool) -> Result<()>
     }
 
     if json || json_pretty {
-        let output = if json_pretty {
-            serde_json::to_string_pretty(&nodes)?
-        } else {
-            serde_json::to_string(&nodes)?
-        };
-        println!("{}", output);
+        crate::cmd::print_json_output(&nodes, json_pretty)?;
         return Ok(());
     }
 

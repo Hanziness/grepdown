@@ -4,7 +4,7 @@
 Systematically implement new capabilities across four areas (Search, Lints, Graph, Output) to make Grepdown more useful for both humans and AI agents, prioritized by value-to-effort ratio.
 
 ## Current Phase
-Phase 1 — Quick Wins (cross-cutting high-value, low-effort features)
+Quick Wins — COMPLETE
 
 ## Phases
 
@@ -12,12 +12,12 @@ Phase 1 — Quick Wins (cross-cutting high-value, low-effort features)
 
 These give the most value for the least effort across all areas. They should be tackled in this order before moving to area-specific deeper work.
 
-- [ ] **QW-1: Expose `get_reachable` in CLI + MCP** — Already implemented in lib, dead code from user perspective. Wire up `grepdown reach <doc> --depth N` and a corresponding MCP tool. *(Graph, Trivial)*
-- [ ] **QW-2: Document content retrieval** — `grepdown read <path>` / MCP `get_document` tool. Completes the search → read loop for MCP clients. *(Output, Trivial)*
-- [ ] **QW-3: Broken links lint** — Links whose `resolve_link()` returned `None` are silently dropped. Store unresolved links and lint them. Most obvious KB health issue, currently invisible. *(Lints, Low)*
-- [ ] **QW-4: Search result deduplication** — UNION ALL returns same doc twice (body + tags). Wrap in dedup logic, prefer better snippet, boost score for matching both. *(Search, Low)*
-- [ ] **QW-5: Compact JSON default for MCP** — CLI `--json` should default to compact (not pretty), add `--json-pretty` for humans. *(Output, Trivial)*
-- [ ] **QW-6: Configurable snippet window** — `--snippet-length N` to widen context around matches. Current hardcoded 32 tokens is too narrow for complex docs. *(Search, Trivial)*
+- [x] **QW-1: Expose `get_reachable` in CLI + MCP** — Already implemented in lib, dead code from user perspective. Wire up `grepdown reach <doc> --depth N` and a corresponding MCP tool. *(Graph, Trivial)*
+- [x] **QW-2: Document content retrieval** — `grepdown read <path>` / MCP `get_document` tool. Completes the search → read loop for MCP clients. *(Output, Trivial)*
+- [x] **QW-3: Broken links lint** — Links whose `resolve_link()` returned `None` are silently dropped. Store unresolved links and lint them. Most obvious KB health issue, currently invisible. *(Lints, Low)*
+- [x] **QW-4: Search result deduplication** — UNION ALL returns same doc twice (body + tags). Wrap in dedup logic, prefer better snippet, boost score for matching both. *(Search, Low)*
+- [x] **QW-5: Compact JSON default for MCP** — CLI `--json` should default to compact (not pretty), add `--json-pretty` for humans. *(Output, Trivial)*
+- [x] **QW-6: Configurable snippet window** — `--snippet-length N` to widen context around matches. Current hardcoded 32 tokens is too narrow for complex docs. *(Search, Trivial)*
 
 ### Area 1: Search Improvements
 

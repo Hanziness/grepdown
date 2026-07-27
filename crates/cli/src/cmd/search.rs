@@ -55,12 +55,7 @@ pub fn search(
     }
 
     if json || json_pretty {
-        let output = if json_pretty {
-            serde_json::to_string_pretty(&results)?
-        } else {
-            serde_json::to_string(&results)?
-        };
-        println!("{}", output);
+        crate::cmd::print_json_output(&results, json_pretty)?;
         return Ok(());
     }
 

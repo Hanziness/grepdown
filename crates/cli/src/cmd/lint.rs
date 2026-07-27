@@ -8,12 +8,7 @@ pub fn lint(json: bool, json_pretty: bool) -> Result<()> {
     let diags = grepdown_lib::run_lints(project.get_conn())?;
 
     if json || json_pretty {
-        let output = if json_pretty {
-            serde_json::to_string_pretty(&diags)?
-        } else {
-            serde_json::to_string(&diags)?
-        };
-        println!("{}", output);
+        crate::cmd::print_json_output(&diags, json_pretty)?;
         std::process::exit(if diags.is_empty() { 0 } else { 1 });
     }
 
