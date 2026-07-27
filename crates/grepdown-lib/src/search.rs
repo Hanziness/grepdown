@@ -50,6 +50,8 @@ impl MDDBProject {
             Some(prefix) => format!("{}%", prefix),
             None => "%".to_string(),
         };
+        // Fetch 2x results to allow for deduplication
+        let fetch_limit = (limit * 2) as i64;
         let mut stmt = conn.prepare(
             "SELECT path, snippet, score FROM (
                 SELECT path,
@@ -68,14 +70,31 @@ impl MDDBProject {
             LIMIT ?2"
         )?;
         
-        stmt.query_map(params![query, limit as i64, path_like], |row| {
+        let mut raw: Vec<SearchResult> = stmt.query_map(params![query, fetch_limit, path_like], |row| {
             Ok(SearchResult {
                 path: row.get(0)?,
                 snippet: row.get(1)?,
                 score: row.get(2)?,
             })
         })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()
+          .collect::<Result<Vec<_>>>()?;
+
+        // Deduplicate: keep first occurrence (best score), boost if matched in both
+        let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut deduped: Vec<SearchResult> = Vec::new();
+        for result in raw.drain(..) {
+            if let Some(&idx) = seen.get(&result.path) {
+                // Already seen — boost the existing result's score
+                deduped[idx].score *= 0.9;
+            } else {
+                seen.insert(result.path.clone(), deduped.len());
+                deduped.push(result);
+            }
+        }
+
+        // Truncate to requested limit
+        deduped.truncate(limit);
+        Ok(deduped)
     }
 
     /// Get all links from a document (forward traversal).
