@@ -8,6 +8,7 @@ pub fn search(
     json: bool,
     json_pretty: bool,
     path: Option<&str>,
+    snippet_length: Option<i64>,
 ) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
 
@@ -24,13 +25,13 @@ pub fn search(
 
     let resolved_path = path.map(|p| p.to_string());
 
-    let results = match project.search(&effective_query, limit, resolved_path.as_deref()) {
+    let results = match project.search(&effective_query, limit, resolved_path.as_deref(), snippet_length) {
         Ok(r) => r,
         Err(e) => {
             let err: anyhow::Error = e.into();
             if !literal && is_fts5_syntax_error(&err) {
                 let escaped = grepdown_lib::escape_fts5_query(query);
-                match project.search(&escaped, limit, resolved_path.as_deref()) {
+                match project.search(&escaped, limit, resolved_path.as_deref(), snippet_length) {
                     Ok(r) => {
                         eprintln!(
                             "Note: original query was not valid FTS5 syntax; treated as literal. \

@@ -61,6 +61,7 @@ async fn test_search_finds_documents() {
             query: "Rust".into(),
             limit: Some(10),
             path_filter: None,
+            snippet_length: None,
         }))
         .await
         .unwrap();
@@ -76,6 +77,7 @@ async fn test_search_with_path_filter() {
             query: "document".into(),
             limit: Some(10),
             path_filter: Some("doc1".into()),
+            snippet_length: None,
         }))
         .await
         .unwrap();

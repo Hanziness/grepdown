@@ -27,6 +27,9 @@ pub struct SearchParams {
     /// Restrict results to documents whose path contains this substring
     #[schemars(description = "Restrict results to documents whose path contains this substring")]
     pub path_filter: Option<String>,
+    /// Number of tokens to include in search snippets (default: 32)
+    #[schemars(description = "Number of tokens to include in search snippets (default: 32)")]
+    pub snippet_length: Option<i64>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -59,9 +62,9 @@ impl GrepdownMCP {
         description = "Search the knowledge base using full-text search. Returns matching documents ranked by relevance. Call `refresh` first if files may have been added or modified since the last index.",
         annotations(title = "Search documents", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    pub async fn search(&self, Parameters(SearchParams { query, limit, path_filter }): Parameters<SearchParams>) -> Result<String, String> {
+    pub async fn search(&self, Parameters(SearchParams { query, limit, path_filter, snippet_length }): Parameters<SearchParams>) -> Result<String, String> {
         let project = self.project.lock().await;
-        let results = project.search(&query, limit.unwrap_or(20), path_filter.as_deref())
+        let results = project.search(&query, limit.unwrap_or(20), path_filter.as_deref(), snippet_length)
             .map_err(|e| e.to_string())?;
 
         serde_json::to_string(&results)

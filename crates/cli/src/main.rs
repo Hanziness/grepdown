@@ -48,6 +48,10 @@ enum Commands {
         /// Filter results to files under this subfolder path
         #[arg(long)]
         path: Option<String>,
+
+        /// Number of tokens in search snippets
+        #[arg(long, default_value = "32")]
+        snippet_length: i64,
     },
 
     /// Explicitly index the folder
@@ -119,9 +123,9 @@ fn main() {
             log::debug!("Initializing grepdown");
             cmd::init::init();
         },
-        Commands::Search { query, limit, no_refresh, literal, json, json_pretty, path } => {
+        Commands::Search { query, limit, no_refresh, literal, json, json_pretty, path, snippet_length } => {
             log::debug!("Searching for: {}", query);
-            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json, *json_pretty, path.as_deref()) {
+            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json, *json_pretty, path.as_deref(), Some(*snippet_length)) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
