@@ -127,6 +127,7 @@ impl MDDBProject {
         
         for entry in WalkDir::new(self.get_root())
             .into_iter()
+            .filter_entry(|e| e.file_name() != ".git")
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().map_or(false, |x| x == "md")) {
                 let meta = match entry.metadata() { Ok(m) => m, Err(_) => continue };
