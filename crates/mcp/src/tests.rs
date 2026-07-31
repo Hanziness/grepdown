@@ -39,7 +39,7 @@ Python documentation.
 
     let project = MDDBProject::new(root).unwrap();
     project.refresh().unwrap();
-    GrepdownMCP::new(project)
+    GrepdownMCP::new(std::sync::Arc::new(tokio::sync::Mutex::new(project)))
 }
 
 #[test]
@@ -181,7 +181,7 @@ This is about Rust programming.
 
     let project = MDDBProject::new(root).unwrap();
     project.refresh().unwrap();
-    let mcp = GrepdownMCP::new(project);
+    let mcp = GrepdownMCP::new(std::sync::Arc::new(tokio::sync::Mutex::new(project)));
 
     let result = mcp
         .get_document(Parameters(DocIdParams {
@@ -219,7 +219,7 @@ async fn test_search_via_mcp_protocol() -> anyhow::Result<()> {
     let (server_transport, client_transport) = tokio::io::duplex(4096);
 
     let server_handle = tokio::spawn(async move {
-        GrepdownMCP::new(project)
+        GrepdownMCP::new(std::sync::Arc::new(tokio::sync::Mutex::new(project)))
             .serve(server_transport)
             .await?
             .waiting()

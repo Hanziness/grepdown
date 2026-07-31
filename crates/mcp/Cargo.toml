@@ -8,10 +8,11 @@ grepdown-lib = { path = "../grepdown-lib" }
 rmcp = { version = "2.2.0", features = ["server"] }
 clap = { version = "4.6.2", features = ["derive"] }
 serde_json = "1.0.150"
-tokio = { version = "1.53.1", features = ["io-std"] }
+tokio = { version = "1.53.1", features = ["io-std", "sync"] }
 serde = "1.0.229"
 schemars = "1.2.1"
 anyhow = "1.0.104"
+notify = "6.1"
 
 [dev-dependencies]
 rmcp = { version = "2.2.0", features = ["server", "client"] }

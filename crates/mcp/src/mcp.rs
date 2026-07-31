@@ -9,9 +9,9 @@ pub struct GrepdownMCP {
 }
 
 impl GrepdownMCP {
-    pub fn new(project: MDDBProject) -> Self {
+    pub fn new(project: Arc<Mutex<MDDBProject>>) -> Self {
         Self {
-            project: Arc::new(Mutex::new(project)),
+            project,
         }
     }
 }
