@@ -8,6 +8,9 @@ pub fn init() {
             project.refresh().unwrap();
             log::info!("Indexing complete");
         },
-        Err(_) => todo!(),
+        Err(e) => {
+            eprintln!("Error: {:#}", e);
+            std::process::exit(1);
+        }
     }
 }
