@@ -90,6 +90,27 @@ enum Commands {
         /// Document path relative to the project root
         path: String,
     },
+
+    /// List all indexed documents
+    List {
+        /// Output results as compact JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show knowledge base statistics
+    Stats {
+        /// Output results as compact JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all tags with document counts
+    Tags {
+        /// Output results as compact JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -147,6 +168,27 @@ fn main() {
         Commands::Read { path } => {
             log::debug!("Reading document: {}", path);
             if let Err(e) = cmd::read::read(path) {
+                eprintln!("Error: {:#}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::List { json } => {
+            log::debug!("Listing documents");
+            if let Err(e) = cmd::list::execute(cmd::list::ListArgs { json: *json }) {
+                eprintln!("Error: {:#}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::Stats { json } => {
+            log::debug!("Showing statistics");
+            if let Err(e) = cmd::stats::execute(cmd::stats::StatsArgs { json: *json }) {
+                eprintln!("Error: {:#}", e);
+                std::process::exit(1);
+            }
+        },
+        Commands::Tags { json } => {
+            log::debug!("Listing tags");
+            if let Err(e) = cmd::tags::execute(cmd::tags::TagsArgs { json: *json }) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }

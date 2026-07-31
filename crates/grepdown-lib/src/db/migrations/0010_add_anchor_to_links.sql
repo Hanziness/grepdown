@@ -4,3 +4,5 @@
 -- NULL means no anchor was specified in the link
 
 ALTER TABLE links ADD COLUMN anchor TEXT;
+
+INSERT INTO schema_migrations (version) VALUES (10) ON CONFLICT(version) DO NOTHING;
