@@ -63,28 +63,37 @@ impl MDDBProject {
         let snippet_len = snippet_length.unwrap_or(32);
         let limit_i64 = limit as i64;
         let mut stmt = conn.prepare_cached(
-            "SELECT path, snippet,
-                    MIN(score) * CASE WHEN COUNT(*) > 1 THEN 0.9 ELSE 1.0 END AS score
+            "SELECT path, snippet, score
              FROM (
-                 SELECT path,
-                        snippet(documents_fts, 1, '<b>', '</b>', ' ... ', ?4) as snippet,
-                        bm25(documents_fts) as score
-                 FROM documents_fts
-                 WHERE documents_fts MATCH ?1 AND path LIKE ?3
-                 UNION ALL
-                 SELECT path,
-                        tags as snippet,
-                        bm25(tags_fts, 10.0) as score
-                 FROM tags_fts
-                 WHERE tags_fts MATCH ?1 AND path LIKE ?3
-                 UNION ALL
-                 SELECT path,
-                        headings as snippet,
-                        bm25(headings_fts, 20.0) as score
-                 FROM headings_fts
-                 WHERE headings_fts MATCH ?1 AND path LIKE ?3
+                 SELECT path, snippet, score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY path 
+                            ORDER BY score, source_priority
+                        ) as rn
+                 FROM (
+                     SELECT path,
+                            snippet(documents_fts, 1, '<b>', '</b>', ' ... ', ?4) as snippet,
+                            bm25(documents_fts) as score,
+                            1 as source_priority
+                     FROM documents_fts
+                     WHERE documents_fts MATCH ?1 AND path LIKE ?3
+                     UNION ALL
+                     SELECT path,
+                            headings as snippet,
+                            bm25(headings_fts, 20.0) as score,
+                            2 as source_priority
+                     FROM headings_fts
+                     WHERE headings_fts MATCH ?1 AND path LIKE ?3
+                     UNION ALL
+                     SELECT path,
+                            tags as snippet,
+                            bm25(tags_fts, 10.0) as score,
+                            3 as source_priority
+                     FROM tags_fts
+                     WHERE tags_fts MATCH ?1 AND path LIKE ?3
+                 )
              )
-             GROUP BY path
+             WHERE rn = 1
              ORDER BY score
              LIMIT ?2"
         )?;
