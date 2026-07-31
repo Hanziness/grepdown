@@ -74,7 +74,7 @@ impl MDDBProject {
                  UNION ALL
                  SELECT path,
                         tags as snippet,
-                        bm25(tags_fts) as score
+                        bm25(tags_fts, 10.0) as score
                  FROM tags_fts
                  WHERE tags_fts MATCH ?1 AND path LIKE ?3
              )
