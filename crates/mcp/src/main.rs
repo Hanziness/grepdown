@@ -15,11 +15,3 @@ async fn main() -> anyhow::Result<()> {
     service.waiting().await?;
     Ok(())
 }
-
-/*
-The Grepdown MCP server is an all-in-one knowledege management service:
-
-1. Start it in a folder where the knowledgebase is
-    * It keeps the DB in memory, so operations are even faster
-2. Manage the knowledge base remotely (e.g., edit files via the `patch` tool)
-*/
