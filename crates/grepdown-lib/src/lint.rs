@@ -7,6 +7,7 @@ pub enum LintId {
     StaleRef,
     Orphan,
     BrokenLink,
+    BrokenAnchor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -25,6 +26,9 @@ pub enum LintData {
     BrokenLink {
         raw_target: String,
     },
+    BrokenAnchor {
+        anchor: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -42,6 +46,7 @@ impl LintId {
             LintId::StaleRef => "STALE REFERENCES DETECTED",
             LintId::Orphan => "ORPHAN DOCUMENTS DETECTED",
             LintId::BrokenLink => "BROKEN LINKS DETECTED",
+            LintId::BrokenAnchor => "BROKEN ANCHORS DETECTED",
         }
     }
 
@@ -56,6 +61,10 @@ impl LintId {
                  1. Creating the missing documents\n   \
                  2. Fixing the link targets\n   \
                  3. Removing the broken links",
+            LintId::BrokenAnchor => "💡 These anchors don't exist in the target document. Consider:\n   \
+                 1. Adding the missing heading to the target document\n   \
+                 2. Fixing the anchor to match an existing heading\n   \
+                 3. Removing the anchor from the link",
         }
     }
 
@@ -64,6 +73,7 @@ impl LintId {
             LintId::StaleRef => format_stale_ref(diags),
             LintId::Orphan => format_orphan(diags),
             LintId::BrokenLink => format_broken_link(diags),
+            LintId::BrokenAnchor => format_broken_anchor(diags),
         }
     }
 }
@@ -120,6 +130,31 @@ fn format_broken_link(diags: &[&Diagnostic]) -> String {
             match &dep.data {
                 LintData::BrokenLink { raw_target } => {
                     out.push_str(&format!("      • {} → {}\n", dep.from_path, raw_target));
+                }
+                _ => unreachable!(),
+            }
+        }
+        out.push('\n');
+    }
+
+    out
+}
+
+fn format_broken_anchor(diags: &[&Diagnostic]) -> String {
+    let mut out = String::new();
+
+    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    for d in diags {
+        by_source.entry(d.from_path.as_str()).or_default().push(d);
+    }
+
+    for (source, deps) in &by_source {
+        out.push_str(&format!("📄 {}\n", source));
+        out.push_str("   └─ Broken anchors:\n");
+        for dep in deps {
+            match &dep.data {
+                LintData::BrokenAnchor { anchor } => {
+                    out.push_str(&format!("      • {} → #{}\n", dep.from_path, anchor));
                 }
                 _ => unreachable!(),
             }
@@ -187,11 +222,35 @@ fn check_broken_link(conn: &Connection) -> Result<Vec<Diagnostic>> {
     })?.map(|r| r.map_err(Into::into)).collect()
 }
 
+fn check_broken_anchor(conn: &Connection) -> Result<Vec<Diagnostic>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.from_id, l.to_id, l.anchor
+         FROM links l
+         WHERE l.anchor IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1 FROM headings h
+               WHERE h.path = l.to_id AND h.anchor = l.anchor
+           )"
+    )?;
+
+    stmt.query_map([], |row| {
+        let anchor: String = row.get(2)?;
+        Ok(Diagnostic {
+            lint_id: LintId::BrokenAnchor,
+            severity: Severity::Error,
+            from_path: row.get(0)?,
+            to_path: row.get(1)?,
+            data: LintData::BrokenAnchor { anchor },
+        })
+    })?.map(|r| r.map_err(Into::into)).collect()
+}
+
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
     let mut all = Vec::new();
     all.extend(check_stale_ref(conn)?);
     all.extend(check_orphan(conn)?);
     all.extend(check_broken_link(conn)?);
+    all.extend(check_broken_anchor(conn)?);
     Ok(all)
 }
 

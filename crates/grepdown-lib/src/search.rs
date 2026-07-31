@@ -77,6 +77,12 @@ impl MDDBProject {
                         bm25(tags_fts, 10.0) as score
                  FROM tags_fts
                  WHERE tags_fts MATCH ?1 AND path LIKE ?3
+                 UNION ALL
+                 SELECT path,
+                        headings as snippet,
+                        bm25(headings_fts, 20.0) as score
+                 FROM headings_fts
+                 WHERE headings_fts MATCH ?1 AND path LIKE ?3
              )
              GROUP BY path
              ORDER BY score

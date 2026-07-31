@@ -15,25 +15,97 @@ const STMT_UPD_META: &str = "INSERT INTO documents (path, mtime, content_hash) V
 const STMT_DEL_TAGS: &str = "DELETE FROM tags_fts WHERE path = ?1";
 const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
 const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
-const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target, pinned_version) VALUES (?1, ?2, ?3, (SELECT version FROM documents WHERE path = ?2))";
+const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target, pinned_version, anchor) VALUES (?1, ?2, ?3, (SELECT version FROM documents WHERE path = ?2), ?4)";
 const STMT_DEL_CITATIONS: &str = "DELETE FROM citations WHERE from_id = ?1";
 const STMT_INS_CITATION: &str = "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
 const STMT_DEL_BROKEN: &str = "DELETE FROM broken_links WHERE from_id = ?1";
 const STMT_INS_BROKEN: &str = "INSERT INTO broken_links (from_id, raw_target) VALUES (?1, ?2)";
+const STMT_DEL_HEADINGS: &str = "DELETE FROM headings WHERE path = ?1";
+const STMT_INS_HEADING: &str = "INSERT INTO headings (path, level, text, anchor) VALUES (?1, ?2, ?3, ?4)";
+const STMT_DEL_HEADINGS_FTS: &str = "DELETE FROM headings_fts WHERE path = ?1";
+const STMT_INS_HEADINGS_FTS: &str = "INSERT INTO headings_fts (path, headings) VALUES (?1, ?2)";
 
 /// Extract all links from markdown content.
-/// Returns (target, is_external) where is_external=true means citation (URL).
-fn extract_links(content: &str) -> Vec<(String, bool)> {
+/// Returns (target, is_external, anchor) where is_external=true means citation (URL).
+fn extract_links(content: &str) -> Vec<(String, bool, Option<String>)> {
     Parser::new(content)
         .filter_map(|event| match event {
             Event::Start(Tag::Link { dest_url, .. }) | Event::Start(Tag::Image { dest_url, .. }) => {
                 let url = dest_url.to_string();
                 let is_external = url.contains("://") || url.starts_with("mailto:") || url.starts_with("//");
-                Some((url, is_external))
+                
+                // Extract anchor (fragment) from URL
+                let (target, anchor) = if let Some(hash_pos) = url.find('#') {
+                    let anchor = url[hash_pos + 1..].to_string();
+                    let target = url[..hash_pos].to_string();
+                    (target, Some(anchor))
+                } else {
+                    (url, None)
+                };
+                
+                Some((target, is_external, anchor))
             }
             _ => None,
         })
         .collect()
+}
+
+/// Extract all headings from markdown content.
+/// Returns (level, text) pairs where level is 1-6.
+fn extract_headings(content: &str) -> Vec<(i32, String)> {
+    let mut headings = Vec::new();
+    let mut in_heading = false;
+    let mut current_level = 0;
+    let mut current_text = String::new();
+    
+    for event in Parser::new(content) {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                in_heading = true;
+                current_level = level as i32;
+                current_text.clear();
+            }
+            Event::Text(text) if in_heading => {
+                current_text.push_str(&text);
+            }
+            Event::End(_) if in_heading => {
+                headings.push((current_level, current_text.clone()));
+                in_heading = false;
+            }
+            _ => {}
+        }
+    }
+    
+    headings
+}
+
+/// Convert heading text to a URL-friendly anchor slug.
+/// - Lowercase
+/// - Replace spaces with hyphens
+/// - Remove non-alphanumeric characters (except hyphens)
+/// - Collapse consecutive hyphens
+fn slugify(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut last_was_hyphen = false;
+    
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            result.push(c.to_ascii_lowercase());
+            last_was_hyphen = false;
+        } else if c == ' ' || c == '-' {
+            if !last_was_hyphen && !result.is_empty() {
+                result.push('-');
+                last_was_hyphen = true;
+            }
+        }
+    }
+    
+    // Remove trailing hyphen
+    if result.ends_with('-') {
+        result.pop();
+    }
+    
+    result
 }
 
 /// Result of indexing a single document in the parallel phase.
@@ -44,12 +116,14 @@ struct IndexedDoc {
     content: String,
     hash: Vec<u8>,
     tags: String,
-    /// (resolved_target, raw_target) — deduped by resolved_target
-    resolved_links: Vec<(String, String)>,
+    /// (resolved_target, raw_target, anchor) — deduped by resolved_target
+    resolved_links: Vec<(String, String, Option<String>)>,
     /// External URLs — deduped
     citations: Vec<String>,
     /// Raw targets that couldn't be resolved
     broken_raw: Vec<String>,
+    /// (level, text, anchor)
+    headings: Vec<(i32, String, String)>,
 }
 
 /// Resolve a bundle-relative link target to a canonical document path using only
@@ -172,20 +246,30 @@ impl MDDBProject {
                 links.dedup();
 
                 // Resolve all links via in-memory set membership — zero syscalls
-                let mut resolved_map: HashMap<String, String> = HashMap::new();
+                let mut resolved_map: HashMap<String, (String, Option<String>)> = HashMap::new();
                 let mut citation_set: HashSet<String> = HashSet::new();
                 let mut broken_raw: Vec<String> = Vec::new();
 
-                for (target, is_external) in &links {
+                for (target, is_external, anchor) in &links {
                     if *is_external {
                         citation_set.insert(target.clone());
                     } else {
                         match resolve_in_set(&current_paths, path, target) {
-                            Some(resolved) => { resolved_map.insert(resolved, target.clone()); }
+                            Some(resolved) => { resolved_map.insert(resolved, (target.clone(), anchor.clone())); }
                             None => { broken_raw.push(target.clone()); }
                         }
                     }
                 }
+
+                // Extract headings and generate anchors
+                let raw_headings = extract_headings(&content);
+                let headings: Vec<(i32, String, String)> = raw_headings
+                    .into_iter()
+                    .map(|(level, text)| {
+                        let anchor = slugify(&text);
+                        (level, text, anchor)
+                    })
+                    .collect();
 
                 ParseResult::Changed(IndexedDoc {
                     path: path.clone(),
@@ -193,9 +277,10 @@ impl MDDBProject {
                     content,
                     hash,
                     tags: tags_str,
-                    resolved_links: resolved_map.into_iter().collect(),
+                    resolved_links: resolved_map.into_iter().map(|(resolved, (raw, anchor))| (resolved, raw, anchor)).collect(),
                     citations: citation_set.into_iter().collect(),
                     broken_raw,
+                    headings,
                 })
             })
             .collect();
@@ -246,8 +331,8 @@ impl MDDBProject {
                 del_citations.execute(params![doc.path])?;
                 del_broken.execute(params![doc.path])?;
 
-                for (resolved, raw) in &doc.resolved_links {
-                    ins_link.execute(params![doc.path, resolved, raw])?;
+                for (resolved, raw, anchor) in &doc.resolved_links {
+                    ins_link.execute(params![doc.path, resolved, raw, anchor])?;
                 }
                 for url in &doc.citations {
                     ins_citation.execute(params![doc.path, url, url])?;
@@ -257,11 +342,33 @@ impl MDDBProject {
                 }
             }
 
+            // Phase 3: Insert headings (structured + FTS)
+            let mut del_headings = tx.prepare(STMT_DEL_HEADINGS)?;
+            let mut ins_heading = tx.prepare(STMT_INS_HEADING)?;
+            let mut del_headings_fts = tx.prepare(STMT_DEL_HEADINGS_FTS)?;
+            let mut ins_headings_fts = tx.prepare(STMT_INS_HEADINGS_FTS)?;
+            for doc in &changed_docs {
+                del_headings.execute(params![doc.path])?;
+                del_headings_fts.execute(params![doc.path])?;
+                
+                for (level, text, anchor) in &doc.headings {
+                    ins_heading.execute(params![doc.path, level, text, anchor])?;
+                }
+                
+                // Insert all heading text into FTS for search
+                if !doc.headings.is_empty() {
+                    let headings_text: Vec<&str> = doc.headings.iter().map(|(_, text, _)| text.as_str()).collect();
+                    ins_headings_fts.execute(params![doc.path, headings_text.join(" ")])?;
+                }
+            }
+
             // Remove files deleted from disk
             let mut del_stale = tx.prepare("DELETE FROM documents WHERE path = ?1")?;
             for path in &deleted {
                 del_fts.execute(params![path])?;
                 del_tags.execute(params![path])?;
+                del_headings.execute(params![path])?;
+                del_headings_fts.execute(params![path])?;
                 del_stale.execute(params![path])?;
             }
 
