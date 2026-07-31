@@ -8,6 +8,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0004_drop_metadata", include_str!("migrations/0004_drop_metadata.sql")),
     ("0005_lint_versioning", include_str!("migrations/0005_lint_versioning.sql")),
     ("0006_broken_links", include_str!("migrations/0006_broken_links.sql")),
+    ("0007_drop_link_type", include_str!("migrations/0007_drop_link_type.sql")),
 ];
 
 pub fn bootstrap(conn: &Connection) -> Result<()> {
