@@ -9,6 +9,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0005_lint_versioning", include_str!("migrations/0005_lint_versioning.sql")),
     ("0006_broken_links", include_str!("migrations/0006_broken_links.sql")),
     ("0007_drop_link_type", include_str!("migrations/0007_drop_link_type.sql")),
+    ("0008_content_hash_blob", include_str!("migrations/0008_content_hash_blob.sql")),
 ];
 
 pub fn bootstrap(conn: &Connection) -> Result<()> {

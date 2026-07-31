@@ -42,7 +42,7 @@ struct IndexedDoc {
     path: String,
     mtime: i64,
     content: String,
-    hash: String,
+    hash: Vec<u8>,
     tags: String,
     /// (resolved_target, raw_target) — deduped by resolved_target
     resolved_links: Vec<(String, String)>,
@@ -99,14 +99,14 @@ fn normalize_path(path: &Path) -> std::path::PathBuf {
 /// `Unchanged` = content matches → only mtime needs write-back.
 enum ParseResult {
     Changed(IndexedDoc),
-    Unchanged { path: String, mtime: i64, hash: String },
+    Unchanged { path: String, mtime: i64, hash: Vec<u8> },
 }
 
 impl MDDBProject {
     /// Refresh the database and index files not seen before
     pub fn refresh(&self) -> Result<Vec<(String, i64)>> {
         let root = self.get_root();
-        let mut known = HashMap::<String, (i64, String)>::new();
+        let mut known = HashMap::<String, (i64, Vec<u8>)>::new();
         let conn = self.get_conn();
 
         // Load known mtimes into memory
@@ -115,7 +115,7 @@ impl MDDBProject {
             let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
 
             for r in rows {
-                let (path, mtime, content_hash): (String, i64, String) = r?;
+                let (path, mtime, content_hash): (String, i64, Vec<u8>) = r?;
                 known.insert(path, (mtime, content_hash));
             }
         }
@@ -153,7 +153,7 @@ impl MDDBProject {
             .map(|(path, mtime)| {
                 let content = fs::read_to_string(Path::new(root).join(path))
                     .unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
-                let hash = blake3::hash(content.as_bytes()).to_string();
+                let hash = blake3::hash(content.as_bytes()).as_bytes().to_vec();
 
                 if let Some((_, old_hash)) = known.get(path) {
                     if *old_hash == hash {
@@ -202,7 +202,7 @@ impl MDDBProject {
 
         // Split into changed-docs (full re-index) and touch-only (mtime write-back)
         let mut changed_docs: Vec<IndexedDoc> = Vec::new();
-        let mut touch: Vec<(String, i64, String)> = Vec::new();
+        let mut touch: Vec<(String, i64, Vec<u8>)> = Vec::new();
         for r in results {
             match r {
                 ParseResult::Changed(doc) => changed_docs.push(doc),
