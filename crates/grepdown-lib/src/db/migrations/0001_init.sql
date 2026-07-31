@@ -1,7 +1,6 @@
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA foreign_keys = ON;
--- PRAGMA mmap_size = 268435456; -- 256MB, tune per corpus size
+-- NOTE: PRAGMAs (journal_mode, synchronous, foreign_keys, cache_size,
+-- temp_store, mmap_size) are set per-connection in db::start(), not here.
+-- SQLite PRAGMAs are per-connection and do not persist across reopens.
 
 -- Track schema version so future migrations (0002_*.sql, ...) know where to start
 CREATE TABLE IF NOT EXISTS schema_migrations (
