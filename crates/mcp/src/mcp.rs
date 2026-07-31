@@ -30,6 +30,9 @@ pub struct SearchParams {
     /// Number of tokens to include in search snippets (default: 32)
     #[schemars(description = "Number of tokens to include in search snippets (default: 32)")]
     pub snippet_length: Option<i64>,
+    /// Automatically refresh the index before searching (default: true)
+    #[schemars(description = "Automatically refresh the index before searching (default: true)")]
+    pub auto_refresh: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -59,11 +62,17 @@ pub struct ReachableParams {
 #[tool_router(vis = "pub")]
 impl GrepdownMCP {
     #[tool(
-        description = "Search the knowledge base using full-text search. Returns matching documents ranked by relevance. Call `refresh` first if files may have been added or modified since the last index.",
+        description = "Search the knowledge base using full-text search. Returns matching documents ranked by relevance. By default, automatically refreshes the index before searching — set auto_refresh to false to skip this if you know the index is fresh.",
         annotations(title = "Search documents", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    pub async fn search(&self, Parameters(SearchParams { query, limit, path_filter, snippet_length }): Parameters<SearchParams>) -> Result<String, String> {
+    pub async fn search(&self, Parameters(SearchParams { query, limit, path_filter, snippet_length, auto_refresh }): Parameters<SearchParams>) -> Result<String, String> {
         let project = self.project.lock().await;
+
+        // Auto-refresh by default (aligns with CLI behavior)
+        if auto_refresh.unwrap_or(true) {
+            project.refresh().map_err(|e| e.to_string())?;
+        }
+
         let results = project.search(&query, limit.unwrap_or(20), path_filter.as_deref(), snippet_length)
             .map_err(|e| e.to_string())?;
 
