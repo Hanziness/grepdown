@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt, path::Path};
 use rayon::prelude::*;
 use rusqlite::params;
-use walkdir::WalkDir;
+use ignore::WalkBuilder;
 use pulldown_cmark::{Event, Parser, Tag};
 use crate::error::Result;
 
@@ -120,14 +120,13 @@ impl MDDBProject {
             }
         }
 
-        // Walk and diff
+        // Walk and diff — respects .gitignore, .ignore, .rgignore automatically
         let mut changed: Vec<(String, i64)> = Vec::new();
         let mut current_paths = HashSet::new();
         let mut walked = 0usize;
         
-        for entry in WalkDir::new(self.get_root())
-            .into_iter()
-            .filter_entry(|e| e.file_name() != ".git")
+        for entry in WalkBuilder::new(self.get_root())
+            .build()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().map_or(false, |x| x == "md")) {
                 let meta = match entry.metadata() { Ok(m) => m, Err(_) => continue };
