@@ -1,0 +1,71 @@
+name: Release-plz
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Block forks from running release jobs.
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Open or update the release PR.
+  # Runs `release-plz release-pr`: bumps versions in Cargo.toml, generates
+  # CHANGELOG.md, and opens/updates a single PR (release-plz-*) that
+  # captures all workspace crates (they share workspace.package.version).
+  release-plz-pr:
+    name: Release-plz PR
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'Hanziness' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run release-plz
+        uses: release-plz/[email protected]
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # On every push to main (including merges of the release PR), check
+  # whether there are unpublished packages and run `cargo publish` for
+  # them in dependency order. `release_always = false` in release-plz.toml
+  # means this only publishes when the latest commit is the merged release
+  # PR — every other commit is a no-op.
+  release-plz-release:
+    name: Release-plz release
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'Hanziness' }}
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run release-plz
+        uses: release-plz/[email protected]
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
