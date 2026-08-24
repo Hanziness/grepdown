@@ -1,5 +1,5 @@
 use anyhow::Result;
-use grepdown_lib::MDDBProject;
+use grepdown_lib::GrepdownProject;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, mpsc};
 
 /// Start watching the project directory for .md file changes
-pub async fn start_watch(project: Arc<Mutex<MDDBProject>>) -> Result<()> {
+pub async fn start_watch(project: Arc<Mutex<GrepdownProject>>) -> Result<()> {
     let root = {
         let proj = project.lock().await;
         PathBuf::from(proj.get_root())

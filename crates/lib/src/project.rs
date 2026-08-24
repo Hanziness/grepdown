@@ -6,12 +6,12 @@ use crate::db;
 use crate::db::DB_PATH;
 
 #[derive(Debug)]
-pub struct MDDBProject {
+pub struct GrepdownProject {
     root: String,
     conn: Connection,
 }
 
-impl MDDBProject {
+impl GrepdownProject {
     pub fn new(root: impl AsRef<std::path::Path>) -> Result<Self> {
         let root_path = root.as_ref().canonicalize()?.to_string_lossy().into_owned();
         let conn = db::start(&root_path)?;

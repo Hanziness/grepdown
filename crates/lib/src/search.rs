@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::frontmatter::{extract_tags, parse_frontmatter};
-use crate::project::MDDBProject;
+use crate::project::GrepdownProject;
 use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::path::Path;
@@ -49,7 +49,7 @@ fn query_links(conn: &Connection, sql: &str, id: &str) -> Result<Vec<Link>> {
     .collect()
 }
 
-impl MDDBProject {
+impl GrepdownProject {
     /// Search the indexed documents using FTS5 full-text search.
     ///
     /// The query string supports FTS5 syntax (e.g., "word1 word2", "word1 OR word2",

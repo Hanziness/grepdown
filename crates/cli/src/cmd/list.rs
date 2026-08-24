@@ -18,7 +18,7 @@ struct ListItem {
 }
 
 pub fn execute(args: ListArgs) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
+    let project = grepdown_lib::GrepdownProject::open(".").context("Failed to open project")?;
     let conn = project.get_conn();
 
     let mut stmt = conn.prepare(

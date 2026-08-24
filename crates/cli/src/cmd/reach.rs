@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 pub fn reach(doc: &str, depth: i64, json: bool) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
+    let project = grepdown_lib::GrepdownProject::open(".").context("Failed to open project")?;
 
     let nodes = project
         .get_reachable(doc, depth)

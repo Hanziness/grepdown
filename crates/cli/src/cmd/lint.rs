@@ -3,7 +3,7 @@ use grepdown_lib::LintId;
 use std::collections::HashMap;
 
 pub fn lint(json: bool) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".")?;
+    let project = grepdown_lib::GrepdownProject::open(".")?;
     project.refresh()?;
     let diags = grepdown_lib::run_lints(project.get_conn())?;
 
@@ -35,7 +35,7 @@ pub fn lint(json: bool) -> Result<()> {
 }
 
 pub fn approve(all: bool, paths: &[String]) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".")?;
+    let project = grepdown_lib::GrepdownProject::open(".")?;
     project.refresh()?;
 
     let n = if all {

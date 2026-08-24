@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::frontmatter::{extract_tags, parse_frontmatter};
-use crate::project::MDDBProject;
+use crate::project::GrepdownProject;
 
 const STMT_MTIME: &str = "SELECT path, mtime, content_hash FROM documents";
 const STMT_DEL_FTS: &str = "DELETE FROM documents_fts WHERE path = ?1";
@@ -193,7 +193,7 @@ enum ParseResult {
     },
 }
 
-impl MDDBProject {
+impl GrepdownProject {
     /// Refresh the database and index files not seen before
     pub fn refresh(&self) -> Result<Vec<(String, i64)>> {
         let root = self.get_root();

@@ -9,7 +9,7 @@ pub fn search(
     path: Option<&str>,
     snippet_length: Option<i64>,
 ) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
+    let project = grepdown_lib::GrepdownProject::open(".").context("Failed to open project")?;
 
     if !no_refresh {
         log::info!("Refreshing index...");

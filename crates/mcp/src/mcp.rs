@@ -1,15 +1,15 @@
-use grepdown_lib::{DocumentContent, Link, MDDBProject, ReachableNode, approve_edits, run_lints};
+use grepdown_lib::{DocumentContent, Link, GrepdownProject, ReachableNode, approve_edits, run_lints};
 use rmcp::{ServerHandler, handler::server::wrapper::Parameters, tool, tool_handler, tool_router};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct GrepdownMCP {
-    project: Arc<Mutex<MDDBProject>>,
+    project: Arc<Mutex<GrepdownProject>>,
 }
 
 impl GrepdownMCP {
-    pub fn new(project: Arc<Mutex<MDDBProject>>) -> Self {
+    pub fn new(project: Arc<Mutex<GrepdownProject>>) -> Self {
         Self { project }
     }
 }
