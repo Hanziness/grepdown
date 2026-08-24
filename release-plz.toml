@@ -6,4 +6,4 @@ release_always = false
 git_release_enable = true
 git_release_name = "v{{version}}"
 pr_labels = ["release"]
-repo_url = "https://github.com/Hanziness/mddb"
+repo_url = "https://github.com/Hanziness/grepdown"
