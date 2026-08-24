@@ -1,7 +1,17 @@
 [package]
 name = "grepdown-mcp"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+description = "MCP server for grepdown: exposes Markdown knowledge base search, traversal, and linting to AI agents over stdio"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories = ["api-bindings"]
+
+[[bin]]
+name = "grepdown-mcp"
+path = "src/main.rs"
 
 [dependencies]
 grepdown-lib = { path = "../grepdown-lib" }

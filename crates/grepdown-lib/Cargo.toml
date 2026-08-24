@@ -1,7 +1,13 @@
 [package]
 name = "grepdown-lib"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+description = "Core library for grepdown: SQLite-backed Markdown indexing, FTS5 search, and link-graph traversal"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories = ["database-implementations", "text-processing"]
 
 [dependencies]
 rusqlite = { version = "0.40.1", features = ["bundled"] }
