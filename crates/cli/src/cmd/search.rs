@@ -24,7 +24,12 @@ pub fn search(
 
     let resolved_path = path.map(|p| p.to_string());
 
-    let results = match project.search(&effective_query, limit, resolved_path.as_deref(), snippet_length) {
+    let results = match project.search(
+        &effective_query,
+        limit,
+        resolved_path.as_deref(),
+        snippet_length,
+    ) {
         Ok(r) => r,
         Err(e) => {
             let err: anyhow::Error = e.into();

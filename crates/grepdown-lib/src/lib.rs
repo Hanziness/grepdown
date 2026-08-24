@@ -6,7 +6,6 @@ mod project;
 mod search;
 
 pub use error::{Error, Result};
-pub use lint::{Diagnostic, Severity, LintData, LintId, run_lints, approve_edits};
+pub use lint::{Diagnostic, LintData, LintId, Severity, approve_edits, run_lints};
 pub use project::MDDBProject;
-pub use search::{SearchResult, Link, ReachableNode, DocumentContent, escape_fts5_query};
-
+pub use search::{DocumentContent, Link, ReachableNode, SearchResult, escape_fts5_query};

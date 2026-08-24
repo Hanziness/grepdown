@@ -1,9 +1,9 @@
+use crate::error::Result;
+use crate::frontmatter::{extract_tags, parse_frontmatter};
+use crate::project::MDDBProject;
 use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::path::Path;
-use crate::error::Result;
-use crate::project::MDDBProject;
-use crate::frontmatter::{parse_frontmatter, extract_tags};
 
 /// Escape a query string so FTS5 treats it as a literal phrase.
 /// Wraps the input in double quotes and escapes any inner `"` as `""`.
@@ -44,17 +44,25 @@ fn query_links(conn: &Connection, sql: &str, id: &str) -> Result<Vec<Link>> {
             target: row.get(0)?,
             raw_target: row.get(1)?,
         })
-    })?.map(|r| r.map_err(Into::into)).collect()
+    })?
+    .map(|r| r.map_err(Into::into))
+    .collect()
 }
 
 impl MDDBProject {
     /// Search the indexed documents using FTS5 full-text search.
-    /// 
+    ///
     /// The query string supports FTS5 syntax (e.g., "word1 word2", "word1 OR word2",
     /// "word1 NEAR word2", "prefix*"). Searches body content and tags.
-    /// 
+    ///
     /// Results are ranked by BM25 relevance (lower score = better match).
-    pub fn search(&self, query: &str, limit: usize, path_filter: Option<&str>, snippet_length: Option<i64>) -> Result<Vec<SearchResult>> {
+    pub fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        path_filter: Option<&str>,
+        snippet_length: Option<i64>,
+    ) -> Result<Vec<SearchResult>> {
         let conn = self.get_conn();
         let path_like = match path_filter {
             Some(prefix) => format!("{}%", prefix),
@@ -95,7 +103,7 @@ impl MDDBProject {
              )
              WHERE rn = 1
              ORDER BY score
-             LIMIT ?2"
+             LIMIT ?2",
         )?;
 
         stmt.query_map(params![query, limit_i64, path_like, snippet_len], |row| {
@@ -104,14 +112,19 @@ impl MDDBProject {
                 snippet: row.get(1)?,
                 score: row.get(2)?,
             })
-        })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()
+        })?
+        .map(|r| r.map_err(Into::into))
+        .collect::<Result<Vec<_>>>()
     }
 
     /// Get all links from a document (forward traversal).
     /// Returns cross-references to other documents.
     pub fn get_links_from(&self, from_id: &str) -> Result<Vec<Link>> {
-        query_links(self.get_conn(), "SELECT to_id, raw_target FROM links WHERE from_id = ?1", from_id)
+        query_links(
+            self.get_conn(),
+            "SELECT to_id, raw_target FROM links WHERE from_id = ?1",
+            from_id,
+        )
     }
 
     /// Get all citations (external URLs) from a document.
@@ -125,7 +138,11 @@ impl MDDBProject {
 
     /// Get all links to a document (reverse traversal / backlinks).
     pub fn get_links_to(&self, to_id: &str) -> Result<Vec<Link>> {
-        query_links(self.get_conn(), "SELECT from_id, raw_target FROM links WHERE to_id = ?1", to_id)
+        query_links(
+            self.get_conn(),
+            "SELECT from_id, raw_target FROM links WHERE to_id = ?1",
+            to_id,
+        )
     }
 
     /// BFS traversal: get all nodes reachable from a starting node up to max_depth hops.
@@ -146,16 +163,17 @@ impl MDDBProject {
             SELECT node, MIN(depth) AS depth 
             FROM bfs 
             GROUP BY node 
-            ORDER BY depth"
+            ORDER BY depth",
         )?;
-        
+
         stmt.query_map(params![from_id, max_depth], |row| {
             Ok(ReachableNode {
                 path: row.get(0)?,
                 depth: row.get(1)?,
             })
-        })?.map(|r| r.map_err(Into::into))
-          .collect::<Result<Vec<_>>>()
+        })?
+        .map(|r| r.map_err(Into::into))
+        .collect::<Result<Vec<_>>>()
     }
 
     /// Read a document's content and extract its frontmatter tags.

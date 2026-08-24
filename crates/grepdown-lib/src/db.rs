@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use rusqlite::Connection;
 use crate::error::Result;
+use rusqlite::Connection;
 
 mod init;
 mod parse;
@@ -26,7 +26,10 @@ pub fn start(root: &str) -> Result<Connection> {
     let db_path = Path::new(root).join(DB_PATH);
     let conn = Connection::open(&db_path)?;
     conn.execute_batch(CONNECTION_PRAGMAS)?;
-    log::debug!("Opened database at {} (WAL, 8MB cache, 256MB mmap)", db_path.display());
+    log::debug!(
+        "Opened database at {} (WAL, 8MB cache, 256MB mmap)",
+        db_path.display()
+    );
     init::bootstrap(&conn)?;
 
     Ok(conn)

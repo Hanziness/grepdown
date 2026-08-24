@@ -1,12 +1,17 @@
-use std::{collections::{HashMap, HashSet}, fs, os::unix::fs::MetadataExt, path::Path};
-use rayon::prelude::*;
-use rusqlite::params;
+use crate::error::Result;
 use ignore::WalkBuilder;
 use pulldown_cmark::{Event, Parser, Tag};
-use crate::error::Result;
+use rayon::prelude::*;
+use rusqlite::params;
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    os::unix::fs::MetadataExt,
+    path::Path,
+};
 
+use crate::frontmatter::{extract_tags, parse_frontmatter};
 use crate::project::MDDBProject;
-use crate::frontmatter::{parse_frontmatter, extract_tags};
 
 const STMT_MTIME: &str = "SELECT path, mtime, content_hash FROM documents";
 const STMT_DEL_FTS: &str = "DELETE FROM documents_fts WHERE path = ?1";
@@ -17,11 +22,13 @@ const STMT_INS_TAGS: &str = "INSERT INTO tags_fts (path, tags) VALUES (?1, ?2)";
 const STMT_DEL_LINKS: &str = "DELETE FROM links WHERE from_id = ?1";
 const STMT_INS_LINK: &str = "INSERT INTO links (from_id, to_id, raw_target, pinned_version, anchor) VALUES (?1, ?2, ?3, (SELECT version FROM documents WHERE path = ?2), ?4)";
 const STMT_DEL_CITATIONS: &str = "DELETE FROM citations WHERE from_id = ?1";
-const STMT_INS_CITATION: &str = "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
+const STMT_INS_CITATION: &str =
+    "INSERT INTO citations (from_id, url, raw_target) VALUES (?1, ?2, ?3)";
 const STMT_DEL_BROKEN: &str = "DELETE FROM broken_links WHERE from_id = ?1";
 const STMT_INS_BROKEN: &str = "INSERT INTO broken_links (from_id, raw_target) VALUES (?1, ?2)";
 const STMT_DEL_HEADINGS: &str = "DELETE FROM headings WHERE path = ?1";
-const STMT_INS_HEADING: &str = "INSERT INTO headings (path, level, text, anchor) VALUES (?1, ?2, ?3, ?4)";
+const STMT_INS_HEADING: &str =
+    "INSERT INTO headings (path, level, text, anchor) VALUES (?1, ?2, ?3, ?4)";
 const STMT_DEL_HEADINGS_FTS: &str = "DELETE FROM headings_fts WHERE path = ?1";
 const STMT_INS_HEADINGS_FTS: &str = "INSERT INTO headings_fts (path, headings) VALUES (?1, ?2)";
 
@@ -30,10 +37,12 @@ const STMT_INS_HEADINGS_FTS: &str = "INSERT INTO headings_fts (path, headings) V
 fn extract_links(content: &str) -> Vec<(String, bool, Option<String>)> {
     Parser::new(content)
         .filter_map(|event| match event {
-            Event::Start(Tag::Link { dest_url, .. }) | Event::Start(Tag::Image { dest_url, .. }) => {
+            Event::Start(Tag::Link { dest_url, .. })
+            | Event::Start(Tag::Image { dest_url, .. }) => {
                 let url = dest_url.to_string();
-                let is_external = url.contains("://") || url.starts_with("mailto:") || url.starts_with("//");
-                
+                let is_external =
+                    url.contains("://") || url.starts_with("mailto:") || url.starts_with("//");
+
                 // Extract anchor (fragment) from URL
                 let (target, anchor) = if let Some(hash_pos) = url.find('#') {
                     let anchor = url[hash_pos + 1..].to_string();
@@ -42,7 +51,7 @@ fn extract_links(content: &str) -> Vec<(String, bool, Option<String>)> {
                 } else {
                     (url, None)
                 };
-                
+
                 Some((target, is_external, anchor))
             }
             _ => None,
@@ -57,7 +66,7 @@ fn extract_headings(content: &str) -> Vec<(i32, String)> {
     let mut in_heading = false;
     let mut current_level = 0;
     let mut current_text = String::new();
-    
+
     for event in Parser::new(content) {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
@@ -75,7 +84,7 @@ fn extract_headings(content: &str) -> Vec<(i32, String)> {
             _ => {}
         }
     }
-    
+
     headings
 }
 
@@ -87,7 +96,7 @@ fn extract_headings(content: &str) -> Vec<(i32, String)> {
 fn slugify(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let mut last_was_hyphen = false;
-    
+
     for c in text.chars() {
         if c.is_alphanumeric() {
             result.push(c.to_ascii_lowercase());
@@ -99,12 +108,12 @@ fn slugify(text: &str) -> String {
             }
         }
     }
-    
+
     // Remove trailing hyphen
     if result.ends_with('-') {
         result.pop();
     }
-    
+
     result
 }
 
@@ -130,7 +139,11 @@ struct IndexedDoc {
 /// in-memory path-set membership — no filesystem access.
 /// Returns `None` if the target isn't in `current_paths` (i.e., the link is broken
 /// or escapes the project root).
-fn resolve_in_set(current_paths: &HashSet<String>, base_path: &str, target: &str) -> Option<String> {
+fn resolve_in_set(
+    current_paths: &HashSet<String>,
+    base_path: &str,
+    target: &str,
+) -> Option<String> {
     let base_dir = Path::new(base_path).parent()?;
     let normalized = normalize_path(&base_dir.join(target));
 
@@ -173,7 +186,11 @@ fn normalize_path(path: &Path) -> std::path::PathBuf {
 /// `Unchanged` = content matches → only mtime needs write-back.
 enum ParseResult {
     Changed(IndexedDoc),
-    Unchanged { path: String, mtime: i64, hash: Vec<u8> },
+    Unchanged {
+        path: String,
+        mtime: i64,
+        hash: Vec<u8>,
+    },
 }
 
 impl MDDBProject {
@@ -198,41 +215,55 @@ impl MDDBProject {
         let mut changed: Vec<(String, i64)> = Vec::new();
         let mut current_paths = HashSet::new();
         let mut walked = 0usize;
-        
+
         for entry in WalkBuilder::new(self.get_root())
             .build()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |x| x == "md")) {
-                let meta = match entry.metadata() { Ok(m) => m, Err(_) => continue };
-                let mtime = meta.mtime();
-                let abs_path = entry.path();
-                let rel_path = abs_path.strip_prefix(root).unwrap_or(abs_path);
-                let path = rel_path.to_string_lossy().into_owned();
+            .filter(|e| e.path().extension().map_or(false, |x| x == "md"))
+        {
+            let meta = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let mtime = meta.mtime();
+            let abs_path = entry.path();
+            let rel_path = abs_path.strip_prefix(root).unwrap_or(abs_path);
+            let path = rel_path.to_string_lossy().into_owned();
 
-                current_paths.insert(path.clone());
-                walked += 1;
-                match known.get(&path) {
-                    Some(&(old_mtime, _)) if old_mtime == mtime => { },
-                    _ => changed.push((path, mtime)),
-                }
+            current_paths.insert(path.clone());
+            walked += 1;
+            match known.get(&path) {
+                Some(&(old_mtime, _)) if old_mtime == mtime => {}
+                _ => changed.push((path, mtime)),
             }
+        }
         log::debug!("Walked {} files, {} changed", walked, changed.len());
 
         // Detect deleted files (known from DB but no longer on disk)
-        let deleted: Vec<String> = known.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
+        let deleted: Vec<String> = known
+            .keys()
+            .filter(|k| !current_paths.contains(k.as_str()))
+            .cloned()
+            .collect();
 
         // Parallel read changed files (level-2: skip link resolution if content unchanged)
         let results: Vec<ParseResult> = changed
             .par_iter()
             .map(|(path, mtime)| {
-                let content = fs::read_to_string(Path::new(root).join(path))
-                    .unwrap_or_else(|e| { log::warn!("Failed to read {}: {}", path, e); String::new() });
+                let content = fs::read_to_string(Path::new(root).join(path)).unwrap_or_else(|e| {
+                    log::warn!("Failed to read {}: {}", path, e);
+                    String::new()
+                });
                 let hash = blake3::hash(content.as_bytes()).as_bytes().to_vec();
 
                 if let Some((_, old_hash)) = known.get(path) {
                     if *old_hash == hash {
                         // Content unchanged — record mtime-only touch, skip parsing
-                        return ParseResult::Unchanged { path: path.clone(), mtime: *mtime, hash };
+                        return ParseResult::Unchanged {
+                            path: path.clone(),
+                            mtime: *mtime,
+                            hash,
+                        };
                     }
                 }
 
@@ -255,8 +286,12 @@ impl MDDBProject {
                         citation_set.insert(target.clone());
                     } else {
                         match resolve_in_set(&current_paths, path, target) {
-                            Some(resolved) => { resolved_map.insert(resolved, (target.clone(), anchor.clone())); }
-                            None => { broken_raw.push(target.clone()); }
+                            Some(resolved) => {
+                                resolved_map.insert(resolved, (target.clone(), anchor.clone()));
+                            }
+                            None => {
+                                broken_raw.push(target.clone());
+                            }
                         }
                     }
                 }
@@ -277,7 +312,10 @@ impl MDDBProject {
                     content,
                     hash,
                     tags: tags_str,
-                    resolved_links: resolved_map.into_iter().map(|(resolved, (raw, anchor))| (resolved, raw, anchor)).collect(),
+                    resolved_links: resolved_map
+                        .into_iter()
+                        .map(|(resolved, (raw, anchor))| (resolved, raw, anchor))
+                        .collect(),
                     citations: citation_set.into_iter().collect(),
                     broken_raw,
                     headings,
@@ -296,8 +334,15 @@ impl MDDBProject {
         }
 
         // Rebuild changed return value from actually-reindexed docs
-        changed = changed_docs.iter().map(|doc| (doc.path.clone(), doc.mtime)).collect();
-        log::info!("Indexed {} files, {} mtime-only touches", changed_docs.len(), touch.len());
+        changed = changed_docs
+            .iter()
+            .map(|doc| (doc.path.clone(), doc.mtime))
+            .collect();
+        log::info!(
+            "Indexed {} files, {} mtime-only touches",
+            changed_docs.len(),
+            touch.len()
+        );
 
         // Do a single transaction for the whole batch
         let tx = conn.unchecked_transaction()?;
@@ -350,14 +395,18 @@ impl MDDBProject {
             for doc in &changed_docs {
                 del_headings.execute(params![doc.path])?;
                 del_headings_fts.execute(params![doc.path])?;
-                
+
                 for (level, text, anchor) in &doc.headings {
                     ins_heading.execute(params![doc.path, level, text, anchor])?;
                 }
-                
+
                 // Insert all heading text into FTS for search
                 if !doc.headings.is_empty() {
-                    let headings_text: Vec<&str> = doc.headings.iter().map(|(_, text, _)| text.as_str()).collect();
+                    let headings_text: Vec<&str> = doc
+                        .headings
+                        .iter()
+                        .map(|(_, text, _)| text.as_str())
+                        .collect();
                     ins_headings_fts.execute(params![doc.path, headings_text.join(" ")])?;
                 }
             }
@@ -371,10 +420,13 @@ impl MDDBProject {
                 del_headings_fts.execute(params![path])?;
                 del_stale.execute(params![path])?;
             }
-
         }
         tx.commit()?;
-        log::debug!("Committed transaction with {} rows, {} deleted", changed_docs.len(), deleted.len());
+        log::debug!(
+            "Committed transaction with {} rows, {} deleted",
+            changed_docs.len(),
+            deleted.len()
+        );
 
         // Write back new mtimes for files whose content hash was unchanged,
         // so subsequent refreshes don't re-read and re-hash them.

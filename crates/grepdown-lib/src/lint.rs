@@ -1,6 +1,6 @@
+use crate::error::Result;
 use rusqlite::Connection;
 use serde::Serialize;
-use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum LintId {
@@ -52,19 +52,27 @@ impl LintId {
 
     pub fn suggestions(self) -> &'static str {
         match self {
-            LintId::StaleRef => "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `grepdown approve-edits <filenames>` to mark them as reviewed",
-            LintId::Orphan => "💡 These documents have no links. Consider:\n   \
+            LintId::StaleRef => {
+                "💡 Suggested actions:\n    1. Update them if needed\n    2. Run `grepdown approve-edits <filenames>` to mark them as reviewed"
+            }
+            LintId::Orphan => {
+                "💡 These documents have no links. Consider:\n   \
                  1. Adding links to related documents\n   \
                  2. Linking from other documents to these\n   \
-                 3. Deleting if they're no longer needed",
-            LintId::BrokenLink => "💡 These links point to documents that don't exist. Consider:\n   \
+                 3. Deleting if they're no longer needed"
+            }
+            LintId::BrokenLink => {
+                "💡 These links point to documents that don't exist. Consider:\n   \
                  1. Creating the missing documents\n   \
                  2. Fixing the link targets\n   \
-                 3. Removing the broken links",
-            LintId::BrokenAnchor => "💡 These anchors don't exist in the target document. Consider:\n   \
+                 3. Removing the broken links"
+            }
+            LintId::BrokenAnchor => {
+                "💡 These anchors don't exist in the target document. Consider:\n   \
                  1. Adding the missing heading to the target document\n   \
                  2. Fixing the anchor to match an existing heading\n   \
-                 3. Removing the anchor from the link",
+                 3. Removing the anchor from the link"
+            }
         }
     }
 
@@ -82,24 +90,33 @@ fn format_stale_ref(diags: &[&Diagnostic]) -> String {
     let mut out = String::new();
     out.push_str("The following files were updated, but their dependents may need review:\n\n");
 
-    let mut by_updated: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    let mut by_updated: std::collections::HashMap<&str, Vec<&&Diagnostic>> =
+        std::collections::HashMap::new();
     for d in diags {
         by_updated.entry(d.to_path.as_str()).or_default().push(d);
     }
 
     for (updated_file, deps) in &by_updated {
         let current_version = match &deps[0].data {
-            LintData::StaleRef { current_version, .. } => *current_version,
+            LintData::StaleRef {
+                current_version, ..
+            } => *current_version,
             _ => unreachable!(),
         };
-        out.push_str(&format!("📄 {} (version {})\n", updated_file, current_version));
+        out.push_str(&format!(
+            "📄 {} (version {})\n",
+            updated_file, current_version
+        ));
         out.push_str("   └─ Referenced by:\n");
         for dep in deps {
             let pinned_version = match &dep.data {
                 LintData::StaleRef { pinned_version, .. } => *pinned_version,
                 _ => unreachable!(),
             };
-            out.push_str(&format!("      • {} (pinned at version {})\n", dep.from_path, pinned_version));
+            out.push_str(&format!(
+                "      • {} (pinned at version {})\n",
+                dep.from_path, pinned_version
+            ));
         }
         out.push('\n');
     }
@@ -118,7 +135,8 @@ fn format_orphan(diags: &[&Diagnostic]) -> String {
 fn format_broken_link(diags: &[&Diagnostic]) -> String {
     let mut out = String::new();
 
-    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> =
+        std::collections::HashMap::new();
     for d in diags {
         by_source.entry(d.from_path.as_str()).or_default().push(d);
     }
@@ -143,7 +161,8 @@ fn format_broken_link(diags: &[&Diagnostic]) -> String {
 fn format_broken_anchor(diags: &[&Diagnostic]) -> String {
     let mut out = String::new();
 
-    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> = std::collections::HashMap::new();
+    let mut by_source: std::collections::HashMap<&str, Vec<&&Diagnostic>> =
+        std::collections::HashMap::new();
     for d in diags {
         by_source.entry(d.from_path.as_str()).or_default().push(d);
     }
@@ -170,7 +189,7 @@ fn check_stale_ref(conn: &Connection) -> Result<Vec<Diagnostic>> {
         "SELECT l.from_id, l.to_id, l.pinned_version, d.version
          FROM links l
          JOIN documents d ON l.to_id = d.path
-         WHERE l.pinned_version < d.version"
+         WHERE l.pinned_version < d.version",
     )?;
 
     stmt.query_map([], |row| {
@@ -184,7 +203,9 @@ fn check_stale_ref(conn: &Connection) -> Result<Vec<Diagnostic>> {
                 current_version: row.get(3)?,
             },
         })
-    })?.map(|r| r.map_err(Into::into)).collect()
+    })?
+    .map(|r| r.map_err(Into::into))
+    .collect()
 }
 
 fn check_orphan(conn: &Connection) -> Result<Vec<Diagnostic>> {
@@ -192,7 +213,7 @@ fn check_orphan(conn: &Connection) -> Result<Vec<Diagnostic>> {
         "SELECT d.path
          FROM documents d
          WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = d.path)
-           AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = d.path)"
+           AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = d.path)",
     )?;
 
     stmt.query_map([], |row| {
@@ -204,7 +225,9 @@ fn check_orphan(conn: &Connection) -> Result<Vec<Diagnostic>> {
             to_path: path,
             data: LintData::Orphan,
         })
-    })?.map(|r| r.map_err(Into::into)).collect()
+    })?
+    .map(|r| r.map_err(Into::into))
+    .collect()
 }
 
 fn check_broken_link(conn: &Connection) -> Result<Vec<Diagnostic>> {
@@ -219,7 +242,9 @@ fn check_broken_link(conn: &Connection) -> Result<Vec<Diagnostic>> {
             to_path: raw_target.clone(),
             data: LintData::BrokenLink { raw_target },
         })
-    })?.map(|r| r.map_err(Into::into)).collect()
+    })?
+    .map(|r| r.map_err(Into::into))
+    .collect()
 }
 
 fn check_broken_anchor(conn: &Connection) -> Result<Vec<Diagnostic>> {
@@ -230,7 +255,7 @@ fn check_broken_anchor(conn: &Connection) -> Result<Vec<Diagnostic>> {
            AND NOT EXISTS (
                SELECT 1 FROM headings h
                WHERE h.path = l.to_id AND h.anchor = l.anchor
-           )"
+           )",
     )?;
 
     stmt.query_map([], |row| {
@@ -242,7 +267,9 @@ fn check_broken_anchor(conn: &Connection) -> Result<Vec<Diagnostic>> {
             to_path: row.get(1)?,
             data: LintData::BrokenAnchor { anchor },
         })
-    })?.map(|r| r.map_err(Into::into)).collect()
+    })?
+    .map(|r| r.map_err(Into::into))
+    .collect()
 }
 
 pub fn run_lints(conn: &Connection) -> Result<Vec<Diagnostic>> {
@@ -268,7 +295,11 @@ pub fn approve_edits(conn: &Connection, paths: &[String]) -> Result<usize> {
             []
         )?
     } else {
-        let placeholders: Vec<String> = paths.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
+        let placeholders: Vec<String> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect();
         let sql = format!(
             "WITH stale AS (
                 SELECT l.rowid as link_rowid, d.version as current_version
@@ -281,7 +312,8 @@ pub fn approve_edits(conn: &Connection, paths: &[String]) -> Result<usize> {
             WHERE rowid IN (SELECT link_rowid FROM stale)",
             placeholders.join(", ")
         );
-        let params: Vec<&dyn rusqlite::ToSql> = paths.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            paths.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
         conn.execute(&sql, params.as_slice())?
     };
     Ok(rows)
@@ -302,21 +334,24 @@ mod tests {
         conn.execute(
             "INSERT INTO documents (path, mtime, content_hash, version) VALUES (?1, 0, X'00', ?2)",
             rusqlite::params![path, version],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     fn insert_test_link(conn: &Connection, from_path: &str, to_path: &str, pinned_version: i64) {
         conn.execute(
             "INSERT INTO links (from_id, to_id, pinned_version) VALUES (?1, ?2, ?3)",
             rusqlite::params![from_path, to_path, pinned_version],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     fn insert_broken_link(conn: &Connection, from_path: &str, raw_target: &str) {
         conn.execute(
             "INSERT INTO broken_links (from_id, raw_target) VALUES (?1, ?2)",
             rusqlite::params![from_path, raw_target],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     fn diags_for(diags: &[Diagnostic], id: LintId) -> Vec<&Diagnostic> {
@@ -335,7 +370,10 @@ mod tests {
         assert_eq!(diags[0].from_path, "/a.md");
         assert_eq!(diags[0].to_path, "/b.md");
         match &diags[0].data {
-            LintData::StaleRef { pinned_version, current_version } => {
+            LintData::StaleRef {
+                pinned_version,
+                current_version,
+            } => {
                 assert_eq!(*pinned_version, 1);
                 assert_eq!(*current_version, 2);
             }
@@ -364,11 +402,13 @@ mod tests {
         let rows = approve_edits(&conn, &[]).unwrap();
         assert_eq!(rows, 1);
 
-        let pinned: i64 = conn.query_row(
-            "SELECT pinned_version FROM links WHERE from_id = '/a.md'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let pinned: i64 = conn
+            .query_row(
+                "SELECT pinned_version FROM links WHERE from_id = '/a.md'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(pinned, 2);
     }
 
@@ -385,18 +425,22 @@ mod tests {
         let rows = approve_edits(&conn, &paths).unwrap();
         assert_eq!(rows, 1);
 
-        let pinned_b: i64 = conn.query_row(
-            "SELECT pinned_version FROM links WHERE to_id = '/b.md'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let pinned_b: i64 = conn
+            .query_row(
+                "SELECT pinned_version FROM links WHERE to_id = '/b.md'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(pinned_b, 2);
 
-        let pinned_c: i64 = conn.query_row(
-            "SELECT pinned_version FROM links WHERE to_id = '/c.md'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let pinned_c: i64 = conn
+            .query_row(
+                "SELECT pinned_version FROM links WHERE to_id = '/c.md'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(pinned_c, 1);
     }
 

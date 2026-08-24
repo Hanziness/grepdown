@@ -1,10 +1,10 @@
+use anyhow::Result;
+use grepdown_lib::MDDBProject;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use anyhow::Result;
-use notify::{Watcher, RecursiveMode, Event, EventKind};
-use tokio::sync::{mpsc, Mutex};
-use grepdown_lib::MDDBProject;
+use tokio::sync::{Mutex, mpsc};
 
 /// Start watching the project directory for .md file changes
 pub async fn start_watch(project: Arc<Mutex<MDDBProject>>) -> Result<()> {
@@ -12,7 +12,7 @@ pub async fn start_watch(project: Arc<Mutex<MDDBProject>>) -> Result<()> {
         let proj = project.lock().await;
         PathBuf::from(proj.get_root())
     };
-    
+
     let (tx, mut rx) = mpsc::channel::<()>(100);
 
     // Spawn watcher thread
@@ -21,20 +21,27 @@ pub async fn start_watch(project: Arc<Mutex<MDDBProject>>) -> Result<()> {
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
                 // Only trigger on create/modify/remove events
-                if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)) {
+                if matches!(
+                    event.kind,
+                    EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+                ) {
                     // Check if any .md files were affected
-                    let has_md = event.paths.iter().any(|p| {
-                        p.extension().map_or(false, |ext| ext == "md")
-                    });
+                    let has_md = event
+                        .paths
+                        .iter()
+                        .any(|p| p.extension().map_or(false, |ext| ext == "md"));
                     if has_md {
                         let _ = tx.blocking_send(());
                     }
                 }
             }
-        }).expect("Failed to create file watcher");
+        })
+        .expect("Failed to create file watcher");
 
-        watcher.watch(&watch_root, RecursiveMode::Recursive).expect("Failed to watch directory");
-        
+        watcher
+            .watch(&watch_root, RecursiveMode::Recursive)
+            .expect("Failed to watch directory");
+
         // Keep watcher alive
         loop {
             std::thread::sleep(Duration::from_secs(3600));

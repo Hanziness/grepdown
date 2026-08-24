@@ -1,6 +1,6 @@
-use rusqlite::Connection;
-use crate::error::Result;
 use crate::error::Error;
+use crate::error::Result;
+use rusqlite::Connection;
 
 use crate::db;
 use crate::db::DB_PATH;
@@ -8,7 +8,7 @@ use crate::db::DB_PATH;
 #[derive(Debug)]
 pub struct MDDBProject {
     root: String,
-    conn: Connection
+    conn: Connection,
 }
 
 impl MDDBProject {
@@ -18,7 +18,7 @@ impl MDDBProject {
 
         Ok(Self {
             root: root_path,
-            conn
+            conn,
         })
     }
 
@@ -30,7 +30,10 @@ impl MDDBProject {
             return Err(Error::ProjectNotFound);
         }
         let conn = db::start(&root_path)?;
-        Ok(Self { root: root_path, conn })
+        Ok(Self {
+            root: root_path,
+            conn,
+        })
     }
 
     /// Get a reference to the project's database connection

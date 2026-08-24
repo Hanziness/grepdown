@@ -2,11 +2,12 @@ use clap::Parser;
 use grepdown_lib::MDDBProject;
 use rmcp::ServiceExt;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::io::{stdin, stdout};
+use tokio::sync::Mutex;
 
 mod mcp;
-#[cfg(test)] mod tests;
+#[cfg(test)]
+mod tests;
 mod watch;
 
 #[derive(Parser)]
@@ -15,13 +16,25 @@ struct Args {
     /// Watch for file changes and auto-refresh the index
     #[arg(long)]
     watch: bool,
+
+    /// Project root directory (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    root: String,
+
+    /// Initialize project database if none exists
+    #[arg(long)]
+    init: bool,
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let project = Arc::new(Mutex::new(MDDBProject::open(".")?));
-    
+    let project = Arc::new(Mutex::new(if args.init {
+        MDDBProject::open(&args.root).or_else(|_| MDDBProject::new(&args.root))?
+    } else {
+        MDDBProject::open(&args.root)?
+    }));
+
     // Start file watcher if --watch flag is set
     if args.watch {
         let project_clone = Arc::clone(&project);
@@ -32,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         });
         eprintln!("File watching enabled. Auto-refreshing on .md file changes.");
     }
-    
+
     let handler = mcp::GrepdownMCP::new(Arc::clone(&project));
 
     let transport = (stdin(), stdout());

@@ -1,4 +1,4 @@
-use crate::mcp::{GrepdownMCP, SearchParams, DocIdParams, ApproveEditsParams, ReachableParams};
+use crate::mcp::{ApproveEditsParams, DocIdParams, GrepdownMCP, ReachableParams, SearchParams};
 use grepdown_lib::MDDBProject;
 use rmcp::handler::server::wrapper::Parameters;
 use serde_json;
@@ -34,8 +34,11 @@ Python documentation.
     )
     .unwrap();
 
-    std::fs::write(root.join("doc3.md"), "# Document 3\nStandalone document with no links.\n")
-        .unwrap();
+    std::fs::write(
+        root.join("doc3.md"),
+        "# Document 3\nStandalone document with no links.\n",
+    )
+    .unwrap();
 
     let project = MDDBProject::new(root).unwrap();
     project.refresh().unwrap();
@@ -48,7 +51,16 @@ fn test_all_tools_registered() {
     let tools = router.list_all();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert_eq!(tools.len(), 8);
-    for name in &["search", "refresh", "lint", "approve_edits", "get_links", "get_citations", "get_reachable", "get_document"] {
+    for name in &[
+        "search",
+        "refresh",
+        "lint",
+        "approve_edits",
+        "get_links",
+        "get_citations",
+        "get_reachable",
+        "get_document",
+    ] {
         assert!(names.contains(name), "missing tool: {}", name);
     }
 }
@@ -84,7 +96,11 @@ async fn test_search_with_path_filter() {
         .await
         .unwrap();
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
-    assert!(parsed.iter().all(|r| r["path"].as_str().unwrap().contains("doc1")));
+    assert!(
+        parsed
+            .iter()
+            .all(|r| r["path"].as_str().unwrap().contains("doc1"))
+    );
 }
 
 #[tokio::test]
@@ -130,16 +146,18 @@ async fn test_get_citations_extracts_urls() {
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
     let citations = parsed.as_array().unwrap();
-    assert!(citations.iter().any(|c| c.as_str().unwrap().contains("example.com")));
+    assert!(
+        citations
+            .iter()
+            .any(|c| c.as_str().unwrap().contains("example.com"))
+    );
 }
 
 #[tokio::test]
 async fn test_approve_edits_returns_count() {
     let mcp = test_mcp();
     let result = mcp
-        .approve_edits(Parameters(ApproveEditsParams {
-            paths: None,
-        }))
+        .approve_edits(Parameters(ApproveEditsParams { paths: None }))
         .await
         .unwrap();
     let count: u64 = serde_json::from_str(&result).unwrap();
@@ -159,7 +177,11 @@ async fn test_get_reachable_finds_neighbors() {
         .unwrap();
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
     // doc1 links to doc2, doc2 links to doc1 — both reachable
-    assert!(parsed.iter().any(|n| n["path"].as_str().unwrap() == "doc2.md"));
+    assert!(
+        parsed
+            .iter()
+            .any(|n| n["path"].as_str().unwrap() == "doc2.md")
+    );
 }
 
 #[tokio::test]
@@ -191,7 +213,12 @@ This is about Rust programming.
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
     assert_eq!(parsed["path"].as_str().unwrap(), "test-doc.md");
-    assert!(parsed["content"].as_str().unwrap().contains("Rust programming"));
+    assert!(
+        parsed["content"]
+            .as_str()
+            .unwrap()
+            .contains("Rust programming")
+    );
     let tags = parsed["tags"].as_array().unwrap();
     assert!(tags.iter().any(|t| t.as_str().unwrap() == "rust"));
 }
@@ -231,8 +258,12 @@ async fn test_search_via_mcp_protocol() -> anyhow::Result<()> {
 
     let result = client
         .call_tool(
-            CallToolRequestParams::new("search")
-                .with_arguments(serde_json::json!({"query": "Hello"}).as_object().unwrap().clone()),
+            CallToolRequestParams::new("search").with_arguments(
+                serde_json::json!({"query": "Hello"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
         )
         .await?;
 

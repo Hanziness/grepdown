@@ -20,16 +20,16 @@ struct Stats {
 pub fn execute(args: StatsArgs) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
     let conn = project.get_conn();
-    
+
     let mut stmt = conn.prepare(
         "SELECT 
             (SELECT COUNT(*) FROM documents) as doc_count,
             (SELECT COUNT(*) FROM links) as link_count,
             (SELECT COUNT(*) FROM broken_links) as broken_link_count,
             (SELECT COUNT(DISTINCT path) FROM tags_fts) as tagged_doc_count,
-            (SELECT COUNT(*) FROM headings) as heading_count"
+            (SELECT COUNT(*) FROM headings) as heading_count",
     )?;
-    
+
     let stats: Stats = stmt.query_row([], |row| {
         Ok(Stats {
             doc_count: row.get(0)?,
@@ -39,16 +39,16 @@ pub fn execute(args: StatsArgs) -> Result<()> {
             heading_count: row.get(4)?,
         })
     })?;
-    
+
     // Count orphans (documents with no incoming or outgoing links)
     let orphan_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM documents d
          WHERE NOT EXISTS (SELECT 1 FROM links WHERE from_id = d.path)
            AND NOT EXISTS (SELECT 1 FROM links WHERE to_id = d.path)",
         [],
-        |row| row.get(0)
+        |row| row.get(0),
     )?;
-    
+
     if args.json {
         let output = serde_json::json!({
             "doc_count": stats.doc_count,
@@ -68,6 +68,6 @@ pub fn execute(args: StatsArgs) -> Result<()> {
         println!("  Tagged docs:    {}", stats.tagged_doc_count);
         println!("  Headings:       {}", stats.heading_count);
     }
-    
+
     Ok(())
 }

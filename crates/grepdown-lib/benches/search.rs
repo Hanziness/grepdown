@@ -5,8 +5,10 @@ use std::path::PathBuf;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().expect("grepdown should be nested inside a workspace")
-        .parent().expect("workspace root should exist")
+        .parent()
+        .expect("grepdown should be nested inside a workspace")
+        .parent()
+        .expect("workspace root should exist")
         .to_path_buf()
 }
 
@@ -104,7 +106,7 @@ fn bench_search_warm(c: &mut Criterion) {
     for query in QUERIES {
         group.bench_function(format!("warm/{}", query), |b| {
             b.iter(|| {
-                    project.search(query, SEARCH_LIMIT, None, None).unwrap();
+                project.search(query, SEARCH_LIMIT, None, None).unwrap();
             });
         });
     }

@@ -16,19 +16,17 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize grepdown in the folder
-    Init {
-
-    },
+    Init {},
 
     /// Search the folder for the given query string
     Search {
         /// String to search in the database
         query: String,
-        
+
         /// Maximum number of results to return
         #[arg(short, long, default_value = "20")]
         limit: usize,
-        
+
         /// Skip refreshing the index before searching
         #[arg(long)]
         no_refresh: bool,
@@ -128,70 +126,86 @@ fn main() {
         .init();
 
     match &cli.command {
-        Commands::Init {  } => {
+        Commands::Init {} => {
             log::debug!("Initializing grepdown");
             cmd::init::init();
-        },
-        Commands::Search { query, limit, no_refresh, literal, json, path, snippet_length } => {
+        }
+        Commands::Search {
+            query,
+            limit,
+            no_refresh,
+            literal,
+            json,
+            path,
+            snippet_length,
+        } => {
             log::debug!("Searching for: {}", query);
-            if let Err(e) = cmd::search::search(query, *limit, *no_refresh, *literal, *json, path.as_deref(), Some(*snippet_length)) {
+            if let Err(e) = cmd::search::search(
+                query,
+                *limit,
+                *no_refresh,
+                *literal,
+                *json,
+                path.as_deref(),
+                Some(*snippet_length),
+            ) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
-        Commands::Index { } => {
+        }
+        Commands::Index {} => {
             log::debug!("Indexing folder");
             let project = grepdown_lib::MDDBProject::new(".").unwrap();
             project.refresh().unwrap();
-        },
+        }
         Commands::Lint { json } => {
             log::debug!("Running lints");
             if let Err(e) = cmd::lint::lint(*json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::ApproveEdits { all, paths } => {
             log::debug!("Approving edits");
             if let Err(e) = cmd::lint::approve(*all, paths) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::Reach { doc, depth, json } => {
             log::debug!("Computing reachability from: {}", doc);
             if let Err(e) = cmd::reach::reach(doc, *depth, *json) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::Read { path } => {
             log::debug!("Reading document: {}", path);
             if let Err(e) = cmd::read::read(path) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::List { json } => {
             log::debug!("Listing documents");
             if let Err(e) = cmd::list::execute(cmd::list::ListArgs { json: *json }) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::Stats { json } => {
             log::debug!("Showing statistics");
             if let Err(e) = cmd::stats::execute(cmd::stats::StatsArgs { json: *json }) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
         Commands::Tags { json } => {
             log::debug!("Listing tags");
             if let Err(e) = cmd::tags::execute(cmd::tags::TagsArgs { json: *json }) {
                 eprintln!("Error: {:#}", e);
                 std::process::exit(1);
             }
-        },
+        }
     }
 }

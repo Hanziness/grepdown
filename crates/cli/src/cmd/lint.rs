@@ -1,6 +1,6 @@
 use anyhow::Result;
-use std::collections::HashMap;
 use grepdown_lib::LintId;
+use std::collections::HashMap;
 
 pub fn lint(json: bool) -> Result<()> {
     let project = grepdown_lib::MDDBProject::open(".")?;
