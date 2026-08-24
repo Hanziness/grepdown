@@ -1,0 +1,9 @@
+[workspace]
+publish = true
+semver_check = true
+publish_allow_dirty = false
+release_always = false
+git_release_enable = true
+git_release_name = "v{{version}}"
+pr_labels = ["release"]
+repo_url = "https://github.com/Hanziness/mddb"
