@@ -56,7 +56,7 @@ pub async fn start_watch(project: Arc<Mutex<GrepdownProject>>) -> Result<()> {
         let now = std::time::Instant::now();
         if now.duration_since(last_refresh) >= refresh_interval {
             eprintln!("File change detected, refreshing index...");
-            let mut proj = project.lock().await;
+            let proj = project.lock().await;
             if let Err(e) = proj.refresh() {
                 eprintln!("Failed to refresh index: {}", e);
             } else {
