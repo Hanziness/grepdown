@@ -23,7 +23,6 @@ pulldown-cmark = "0.13"
 [dev-dependencies]
 criterion = "0.5"
 tempfile = "3"
-rusqlite = { version = "0.40.1", features = ["bundled"] }
 
 [[bench]]
 name = "search"
