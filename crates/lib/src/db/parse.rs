@@ -4,7 +4,7 @@ use pulldown_cmark::{Event, Parser, Tag};
 use rayon::prelude::*;
 use rusqlite::params;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     os::unix::fs::MetadataExt,
     path::Path,
@@ -130,7 +130,7 @@ struct IndexedDoc {
     /// External URLs — deduped
     citations: Vec<String>,
     /// Raw targets that couldn't be resolved
-    broken_raw: Vec<String>,
+    broken_raw: BTreeSet<String>,
     /// (level, text, anchor)
     headings: Vec<(i32, String, String)>,
 }
@@ -279,7 +279,7 @@ impl GrepdownProject {
                 // Resolve all links via in-memory set membership — zero syscalls
                 let mut resolved_map: HashMap<String, (String, Option<String>)> = HashMap::new();
                 let mut citation_set: HashSet<String> = HashSet::new();
-                let mut broken_raw: Vec<String> = Vec::new();
+                let mut broken_raw: BTreeSet<String> = BTreeSet::new();
 
                 for (target, is_external, anchor) in &links {
                     if *is_external {
@@ -290,7 +290,7 @@ impl GrepdownProject {
                                 resolved_map.insert(resolved, (target.clone(), anchor.clone()));
                             }
                             None => {
-                                broken_raw.push(target.clone());
+                                broken_raw.insert(target.clone());
                             }
                         }
                     }
