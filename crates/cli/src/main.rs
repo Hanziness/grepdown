@@ -155,7 +155,7 @@ fn main() {
         }
         Commands::Index {} => {
             log::debug!("Indexing folder");
-            let project = grepdown_lib::MDDBProject::new(".").unwrap();
+            let project = grepdown_lib::GrepdownProject::new(".").unwrap();
             project.refresh().unwrap();
         }
         Commands::Lint { json } => {

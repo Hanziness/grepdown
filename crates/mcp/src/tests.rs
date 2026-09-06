@@ -1,5 +1,5 @@
 use crate::mcp::{ApproveEditsParams, DocIdParams, GrepdownMCP, ReachableParams, SearchParams};
-use grepdown_lib::MDDBProject;
+use grepdown_lib::GrepdownProject;
 use rmcp::handler::server::wrapper::Parameters;
 use serde_json;
 use tempfile;
@@ -40,7 +40,7 @@ Python documentation.
     )
     .unwrap();
 
-    let project = MDDBProject::new(root).unwrap();
+    let project = GrepdownProject::new(root).unwrap();
     project.refresh().unwrap();
     GrepdownMCP::new(std::sync::Arc::new(tokio::sync::Mutex::new(project)))
 }
@@ -201,7 +201,7 @@ This is about Rust programming.
     )
     .unwrap();
 
-    let project = MDDBProject::new(root).unwrap();
+    let project = GrepdownProject::new(root).unwrap();
     project.refresh().unwrap();
     let mcp = GrepdownMCP::new(std::sync::Arc::new(tokio::sync::Mutex::new(project)));
 
@@ -240,7 +240,7 @@ async fn test_search_via_mcp_protocol() -> anyhow::Result<()> {
 
     let tempdir = tempfile::tempdir().unwrap();
     std::fs::write(tempdir.path().join("test.md"), "# Test\nHello world\n").unwrap();
-    let project = MDDBProject::new(tempdir.path()).unwrap();
+    let project = GrepdownProject::new(tempdir.path()).unwrap();
     project.refresh().unwrap();
 
     let (server_transport, client_transport) = tokio::io::duplex(4096);

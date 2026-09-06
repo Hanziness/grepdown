@@ -1,5 +1,5 @@
 use clap::Parser;
-use grepdown_lib::MDDBProject;
+use grepdown_lib::GrepdownProject;
 use rmcp::ServiceExt;
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
@@ -30,9 +30,9 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let project = Arc::new(Mutex::new(if args.init {
-        MDDBProject::open(&args.root).or_else(|_| MDDBProject::new(&args.root))?
+        GrepdownProject::open(&args.root).or_else(|_| GrepdownProject::new(&args.root))?
     } else {
-        MDDBProject::open(&args.root)?
+        GrepdownProject::open(&args.root)?
     }));
 
     // Start file watcher if --watch flag is set

@@ -9,7 +9,7 @@ pub struct TagsArgs {
 }
 
 pub fn execute(args: TagsArgs) -> Result<()> {
-    let project = grepdown_lib::MDDBProject::open(".").context("Failed to open project")?;
+    let project = grepdown_lib::GrepdownProject::open(".").context("Failed to open project")?;
     let conn = project.get_conn();
 
     // Extract all tags from tags_fts and count documents per tag

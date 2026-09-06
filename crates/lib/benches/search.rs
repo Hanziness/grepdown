@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use grepdown_lib::MDDBProject;
+use grepdown_lib::GrepdownProject;
 use std::fs;
 use std::path::PathBuf;
 
@@ -44,7 +44,7 @@ fn bench_refresh_initial(c: &mut Criterion) {
         b.iter_batched(
             || {
                 delete_db();
-                MDDBProject::new(bench_root()).unwrap()
+                GrepdownProject::new(bench_root()).unwrap()
             },
             |project| {
                 project.refresh().unwrap();
@@ -60,7 +60,7 @@ fn bench_refresh_noop(c: &mut Criterion) {
     let mut group = c.benchmark_group("refresh");
 
     // Ensure DB is indexed before benchmarking
-    let project = MDDBProject::new(bench_root()).unwrap();
+    let project = GrepdownProject::new(bench_root()).unwrap();
     project.refresh().unwrap();
 
     group.bench_function("noop", |b| {
@@ -81,7 +81,7 @@ fn bench_search_cold(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     delete_db();
-                    let project = MDDBProject::new(bench_root()).unwrap();
+                    let project = GrepdownProject::new(bench_root()).unwrap();
                     project.refresh().unwrap();
                     project
                 },
@@ -100,7 +100,7 @@ fn bench_search_warm(c: &mut Criterion) {
     let mut group = c.benchmark_group("search");
 
     // Ensure DB is indexed before benchmarking
-    let project = MDDBProject::new(bench_root()).unwrap();
+    let project = GrepdownProject::new(bench_root()).unwrap();
     project.refresh().unwrap();
 
     for query in QUERIES {
