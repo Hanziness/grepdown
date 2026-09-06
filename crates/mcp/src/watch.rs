@@ -29,7 +29,7 @@ pub async fn start_watch(project: Arc<Mutex<GrepdownProject>>) -> Result<()> {
                     let has_md = event
                         .paths
                         .iter()
-                        .any(|p| p.extension().map_or(false, |ext| ext == "md"));
+                        .any(|p| p.extension().is_some_and(|ext| ext == "md"));
                     if has_md {
                         let _ = tx.blocking_send(());
                     }

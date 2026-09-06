@@ -1,9 +1,6 @@
 use crate::mcp::{ApproveEditsParams, DocIdParams, GrepdownMCP, ReachableParams, SearchParams};
 use grepdown_lib::GrepdownProject;
 use rmcp::handler::server::wrapper::Parameters;
-use serde_json;
-use tempfile;
-use tokio;
 
 fn test_mcp() -> GrepdownMCP {
     let tempdir = tempfile::tempdir().unwrap();
@@ -79,7 +76,7 @@ async fn test_search_finds_documents() {
         .await
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
-    assert!(parsed.as_array().unwrap().len() > 0);
+    assert!(!parsed.as_array().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -132,7 +129,7 @@ async fn test_get_links_bidirectional() {
     assert!(parsed.get("outgoing").is_some());
     assert!(parsed.get("incoming").is_some());
     let outgoing = parsed["outgoing"].as_array().unwrap();
-    assert!(outgoing.len() > 0, "doc1 should have outgoing links");
+    assert!(!outgoing.is_empty(), "doc1 should have outgoing links");
 }
 
 #[tokio::test]

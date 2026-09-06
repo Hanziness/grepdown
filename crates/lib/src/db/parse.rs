@@ -110,11 +110,9 @@ fn slugify(text: &str) -> String {
         if c.is_alphanumeric() {
             result.push(c.to_ascii_lowercase());
             last_was_hyphen = false;
-        } else if c == ' ' || c == '-' {
-            if !last_was_hyphen && !result.is_empty() {
-                result.push('-');
-                last_was_hyphen = true;
-            }
+        } else if (c == ' ' || c == '-') && !last_was_hyphen && !result.is_empty() {
+            result.push('-');
+            last_was_hyphen = true;
         }
     }
 
@@ -228,7 +226,7 @@ impl GrepdownProject {
         for entry in WalkBuilder::new(self.get_root())
             .build()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |x| x == "md"))
+            .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
         {
             let meta = match entry.metadata() {
                 Ok(m) => m,
@@ -298,15 +296,15 @@ impl GrepdownProject {
                 });
                 let hash = blake3::hash(content.as_bytes()).as_bytes().to_vec();
 
-                if let Some((_, old_hash)) = known.get(path) {
-                    if *old_hash == hash {
-                        // Content unchanged — record mtime-only touch, skip parsing
-                        return ParseResult::Unchanged {
-                            path: path.clone(),
-                            mtime: *mtime,
-                            hash,
-                        };
-                    }
+                if let Some((_, old_hash)) = known.get(path)
+                    && *old_hash == hash
+                {
+                    // Content unchanged — record mtime-only touch, skip parsing
+                    return ParseResult::Unchanged {
+                        path: path.clone(),
+                        mtime: *mtime,
+                        hash,
+                    };
                 }
 
                 let tags = parse_frontmatter(&content)
