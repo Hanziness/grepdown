@@ -1,4 +1,6 @@
-use grepdown_lib::{DocumentContent, Link, GrepdownProject, ReachableNode, approve_edits, run_lints};
+use grepdown_lib::{
+    DocumentContent, GrepdownProject, Link, ReachableNode, approve_edits, run_lints,
+};
 use rmcp::{ServerHandler, handler::server::wrapper::Parameters, tool, tool_handler, tool_router};
 use std::sync::Arc;
 use tokio::sync::Mutex;
