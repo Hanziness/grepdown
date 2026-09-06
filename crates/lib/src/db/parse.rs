@@ -40,8 +40,17 @@ fn extract_links(content: &str) -> Vec<(String, bool, Option<String>)> {
             Event::Start(Tag::Link { dest_url, .. })
             | Event::Start(Tag::Image { dest_url, .. }) => {
                 let url = dest_url.to_string();
-                let is_external =
-                    url.contains("://") || url.starts_with("mailto:") || url.starts_with("//");
+
+                // Pure in-page anchors (#frag): strip the leading '#' - what
+                // precedes it is no file target, so skip the link entirely
+                if url.starts_with('#') {
+                    return None;
+                }
+
+                let is_external = url.contains("://")
+                    || url.starts_with("mailto:")
+                    || url.starts_with("//")
+                    || url.starts_with("www.");
 
                 // Extract anchor (fragment) from URL
                 let (target, anchor) = if let Some(hash_pos) = url.find('#') {
@@ -245,6 +254,39 @@ impl GrepdownProject {
             .filter(|k| !current_paths.contains(k.as_str()))
             .cloned()
             .collect();
+
+        // Include documents in `broken_links` and deleted ones' references in re-checks
+        let mut force: HashSet<String> = HashSet::new();
+        if current_paths.iter().any(|p| !known.contains_key(p)) {
+            let mut stmt = conn.prepare("SELECT DISTINCT from_id FROM broken_links")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            for r in rows {
+                force.insert(r?);
+            }
+        }
+        if !deleted.is_empty() {
+            let mut stmt = conn.prepare("SELECT DISTINCT from_id FROM links WHERE to_id = ?1")?;
+            for d in &deleted {
+                let rows = stmt.query_map(params![d], |r| r.get::<_, String>(0))?;
+                for r in rows {
+                    force.insert(r?);
+                }
+            }
+        }
+
+        for path in force {
+            if !current_paths.contains(&path) {
+                continue; // source gone from disk; its rows cascade away below
+            }
+            // Drop the cached content hash so the unchanged short-circuit below can't skip the forced re-parse
+            known.remove(&path);
+            if !changed.iter().any(|(p, _)| *p == path) {
+                let mtime = fs::metadata(Path::new(root).join(&path))
+                    .map(|m| m.mtime())
+                    .unwrap_or(0);
+                changed.push((path, mtime));
+            }
+        }
 
         // Parallel read changed files (level-2: skip link resolution if content unchanged)
         let results: Vec<ParseResult> = changed
